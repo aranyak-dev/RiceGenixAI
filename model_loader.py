@@ -1,7 +1,10 @@
-import torch
-import torch.nn as nn
-from torchvision import transforms
-from PIL import Image
+try:
+    import torch
+    import torch.nn as nn
+    from torchvision import transforms
+    TORCH_AVAILABLE = True
+except:
+    TORCH_AVAILABLE = False
 
 # ---------------- MODEL CLASS ----------------
 class RiceDiseaseModel(nn.Module):
@@ -36,12 +39,17 @@ class RiceDiseaseModel(nn.Module):
 
 # ---------------- LOAD MODEL ----------------
 def load_model():
-    model = RiceDiseaseModel(num_classes=8)
+    if not TORCH_AVAILABLE:
+        return None
 
-    model.load_state_dict(torch.load("model/disease_model.pth", map_location=torch.device('cpu')))
-    model.eval()
+    model = RiceDiseaseModel(num_classes=8)  # keep your classes
 
-    return model
+    try:
+        model.load_state_dict(torch.load("model/disease_model.pth", map_location="cpu"))
+        model.eval()
+        return model
+    except:
+        return None
 
 # ---------------- CLASS NAMES ----------------
 class_names = [
@@ -56,10 +64,11 @@ class_names = [
 ]
 
 # ---------------- PREDICT FUNCTION ----------------
-def predict(image, model):
+def predict(model, image):
     if model is None:
-        return "Model Not Loaded"
+        return "AI Model Not Available"
 
+    # your normal prediction code here
     transform = transforms.Compose([
         transforms.Resize((224,224)),
         transforms.ToTensor()
