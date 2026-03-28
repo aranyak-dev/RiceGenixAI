@@ -8,7 +8,7 @@ except FileNotFoundError:
     model_dl = None
 
 if model_dl is None:
-    st.warning("AI disease detection unavailable (server limitation)")
+    st.warning("AI model not available on server")
 import streamlit as st
 import pandas as pd
 import numpy as np
