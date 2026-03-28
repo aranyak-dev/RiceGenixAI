@@ -1,3 +1,4 @@
+# ---------------- SAFE IMPORT ----------------
 try:
     import torch
     import torch.nn as nn
@@ -6,69 +7,57 @@ try:
 except:
     TORCH_AVAILABLE = False
 
-# ---------------- MODEL CLASS ----------------
-class RiceDiseaseModel(nn.Module):
-    def __init__(self, num_classes=8):
-        super(RiceDiseaseModel, self).__init__()
+# ---------------- MODEL DEFINITION ----------------
+if TORCH_AVAILABLE:
 
-        self.conv = nn.Sequential(
-            nn.Conv2d(3, 16, 3),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+    class RiceDiseaseModel(nn.Module):
+        def __init__(self, num_classes=8):
+            super().__init__()
 
-            nn.Conv2d(16, 32, 3),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+            self.conv = nn.Sequential(
+                nn.Conv2d(3,16,3),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
 
-            nn.Conv2d(32, 64, 3),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
+                nn.Conv2d(16,32,3),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
 
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(64*26*26, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_classes)
-        )
+                nn.Conv2d(32,64,3),
+                nn.ReLU(),
+                nn.MaxPool2d(2)
+            )
 
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.fc(x)
-        return x
+            self.fc = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(64*26*26,128),
+                nn.ReLU(),
+                nn.Linear(128,num_classes)
+            )
+
+        def forward(self,x):
+            x = self.conv(x)
+            x = self.fc(x)
+            return x
 
 # ---------------- LOAD MODEL ----------------
 def load_model():
     if not TORCH_AVAILABLE:
         return None
 
-    model = RiceDiseaseModel(num_classes=8)  # keep your classes
-
     try:
+        model = RiceDiseaseModel(num_classes=8)
         model.load_state_dict(torch.load("model/disease_model.pth", map_location="cpu"))
         model.eval()
         return model
     except:
         return None
 
-# ---------------- CLASS NAMES ----------------
-class_names = [
-    "Bacterial Leaf Blight",
-    "Brown Spot",
-    "Healthy",
-    "Leaf Blast",
-    "Leaf Scald",
-    "Narrow Brown Leaf Spot",
-    "Rice Hispa",
-    "Sheath Blight"
-]
-
-# ---------------- PREDICT FUNCTION ----------------
+# ---------------- PREDICT ----------------
 def predict(model, image):
-    if model is None:
+    if not TORCH_AVAILABLE or model is None:
         return "AI Model Not Available"
 
-    # your normal prediction code here
     transform = transforms.Compose([
         transforms.Resize((224,224)),
         transforms.ToTensor()
@@ -77,7 +66,18 @@ def predict(model, image):
     image = transform(image).unsqueeze(0)
 
     with torch.no_grad():
-        outputs = model(image)
-        _, predicted = torch.max(outputs, 1)
+        output = model(image)
+        pred = torch.argmax(output,1).item()
 
-    return class_names[predicted.item()]
+    classes = [
+        "Bacterial Leaf Blight",
+        "Brown Spot",
+        "Healthy",
+        "Leaf Blast",
+        "Leaf Scald",
+        "Narrow Brown Leaf Spot",
+        "Rice Hispa",
+        "Sheath Blight"
+    ]
+
+    return classes[pred]
