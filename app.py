@@ -1,3 +1,4 @@
+import streamlit as st
 # ADD THIS IMPORT AT TOP (NEW)
 from model_loader import load_model, predict
 
@@ -9,7 +10,6 @@ except FileNotFoundError:
 
 if model_dl is None:
     st.warning("AI model not available on server")
-import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
