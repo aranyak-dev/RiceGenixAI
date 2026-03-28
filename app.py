@@ -6,6 +6,9 @@ try:
     model_dl = load_model()
 except FileNotFoundError:
     model_dl = None
+
+if model_dl is None:
+    st.warning("AI disease detection unavailable (server limitation)")
 import streamlit as st
 import pandas as pd
 import numpy as np
