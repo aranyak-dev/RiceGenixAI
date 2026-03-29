@@ -12,7 +12,11 @@ if model_dl is None:
     st.warning("AI model not available on server")
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
+try:
+    from sklearn.ensemble import RandomForestRegressor
+    SKLEARN_AVAILABLE = True
+except:
+    SKLEARN_AVAILABLE = False
 import matplotlib.pyplot as plt
 import requests
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table
@@ -232,6 +236,10 @@ except:
 # ---------------- PREDICT ----------------
 st.markdown("<br>", unsafe_allow_html=True)
 
+if not SKLEARN_AVAILABLE:
+    st.error("Prediction model failed to load. Please check deployment.")
+    st.stop()
+    
 if st.button("Predict Yield", use_container_width=True):
 
     # ---------------- SAFE INPUT CONVERSION ----------------
