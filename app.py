@@ -153,6 +153,68 @@ def generate_graphs(result):
     return fig1, fig2
 
 
+def build_pdf_report(result, fig1, fig2, logo_path):
+    disease_val = result.get("disease", 0)
+    water_val = result.get("water", 0)
+    pdf_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    doc = SimpleDocTemplate(pdf_file.name, pagesize=A4)
+    styles = getSampleStyleSheet()
+    content = []
+
+    if os.path.exists(logo_path):
+        logo_img = RLImage(logo_path, width=80, height=80)
+        title = Paragraph("<b><font size=18>RiceGenixAI Report</font></b>", styles["Title"])
+        content.append(Table([[logo_img, title]]))
+    else:
+        content.append(Paragraph("<b><font size=18>RiceGenixAI Report</font></b>", styles["Title"]))
+
+    content.append(Spacer(1, 12))
+    content.append(Paragraph(f"<b>Crop Name:</b> {result['crop_name']}", styles["Normal"]))
+    content.append(Paragraph(f"<b>Predicted Yield:</b> {result['yield']:.2f} tons/hectare", styles["Normal"]))
+    content.append(Paragraph(f"<b>Rainfall:</b> {result['rain']} mm", styles["Normal"]))
+    content.append(Paragraph(f"<b>Temperature:</b> {result['temp']:.2f} C", styles["Normal"]))
+    content.append(Paragraph(f"<b>Soil pH:</b> {result['ph']:.2f}", styles["Normal"]))
+    content.append(Paragraph(f"<b>Expected Height:</b> {result['expected_height']} inches", styles["Normal"]))
+    content.append(Paragraph(f"<b>Your Crop Height:</b> {result['input_height']} inches", styles["Normal"]))
+    content.append(Paragraph(f"<b>Height Status:</b> {result['height_flag']}", styles["Normal"]))
+    content.append(Spacer(1, 10))
+    content.append(Paragraph("<b>Gene Representation</b>", styles["Heading2"]))
+    for index, gene_name in enumerate(["Gene_A", "Gene_B", "Gene_C", "Gene_D"]):
+        content.append(Paragraph(f"{gene_name}: {result['genes'][index]}", styles["Normal"]))
+
+    content.append(Spacer(1, 10))
+    content.append(Paragraph("<b>Crop Health Analysis</b>", styles["Heading2"]))
+    content.append(Paragraph(f"Disease Risk: {'High' if disease_val else 'Low'}", styles["Normal"]))
+    content.append(Paragraph(f"Water Stress: {'Yes' if water_val else 'No'}", styles["Normal"]))
+    content.append(Paragraph(f"Detected Disease: {result['disease_name']}", styles["Normal"]))
+    content.append(Paragraph(f"<b>Treatment:</b> {result['treatment']}", styles["Normal"]))
+
+    temp_graph1 = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    temp_graph2 = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig1.savefig(temp_graph1.name)
+    fig2.savefig(temp_graph2.name)
+    temp_graph1.close()
+    temp_graph2.close()
+
+    content.append(Spacer(1, 10))
+    content.append(Paragraph("<b>Graphs</b>", styles["Heading2"]))
+    content.append(RLImage(temp_graph1.name, width=400, height=250))
+    content.append(Spacer(1, 10))
+    content.append(RLImage(temp_graph2.name, width=400, height=250))
+
+    if result.get("uploaded_image_path"):
+        content.append(Spacer(1, 10))
+        content.append(Paragraph("<b>Uploaded Crop Image</b>", styles["Heading2"]))
+        content.append(RLImage(result["uploaded_image_path"], width=250, height=180))
+
+    content.append(Spacer(1, 20))
+    content.append(Paragraph("<i>A Project by Aranyak Chakraborty</i>", styles["Italic"]))
+    doc.build(content)
+
+    with open(pdf_file.name, "rb") as pdf_stream:
+        return pdf_stream.read()
+
+
 def resolve_image_input(uploaded_file, camera_file):
     image_source = camera_file or uploaded_file
     if image_source is None:
@@ -243,7 +305,7 @@ with st.form("prediction_form"):
     water_source = st.selectbox("Irrigation Water Type", ["Rainwater", "Groundwater", "Mixed"])
     fertilizer_use = st.selectbox("Fertilizer Usage", ["Organic", "Chemical", "Mixed"])
     manual_ph = st.checkbox("I know my soil pH")
-    ph_input = st.slider("Enter Soil pH", 3.0, 9.0, 6.5, step=0.1, disabled=not manual_ph)
+    ph_input = st.slider("Enter Soil pH", 3.0, 9.0, 6.5, step=0.1)
 
     st.markdown("### Crop Image Input")
     uploaded_file = st.file_uploader(
@@ -409,60 +471,12 @@ if st.session_state.result:
     fig1, fig2 = generate_graphs(res)
     st.pyplot(fig1)
     st.pyplot(fig2)
-
-    if st.button("Export Report as PDF"):
-        pdf_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        doc = SimpleDocTemplate(pdf_file.name, pagesize=A4)
-        styles = getSampleStyleSheet()
-        content = []
-
-        if os.path.exists(logo_path):
-            logo_img = RLImage(logo_path, width=80, height=80)
-            title = Paragraph("<b><font size=18>RiceGenixAI Report</font></b>", styles["Title"])
-            content.append(Table([[logo_img, title]]))
-        else:
-            content.append(Paragraph("<b><font size=18>RiceGenixAI Report</font></b>", styles["Title"]))
-
-        content.append(Spacer(1, 12))
-        content.append(Paragraph(f"<b>Crop Name:</b> {res['crop_name']}", styles["Normal"]))
-        content.append(Paragraph(f"<b>Predicted Yield:</b> {res['yield']:.2f} tons/hectare", styles["Normal"]))
-        content.append(Paragraph(f"<b>Rainfall:</b> {res['rain']} mm", styles["Normal"]))
-        content.append(Paragraph(f"<b>Temperature:</b> {res['temp']:.2f} C", styles["Normal"]))
-        content.append(Paragraph(f"<b>Soil pH:</b> {res['ph']:.2f}", styles["Normal"]))
-        content.append(Spacer(1, 10))
-        content.append(Paragraph("<b>Crop Health Analysis</b>", styles["Heading2"]))
-        content.append(Paragraph(f"Disease Risk: {'High' if disease_val else 'Low'}", styles["Normal"]))
-        content.append(Paragraph(f"Water Stress: {'Yes' if water_val else 'No'}", styles["Normal"]))
-        content.append(Paragraph(f"Detected Disease: {res['disease_name']}", styles["Normal"]))
-        content.append(Paragraph(f"<b>Treatment:</b> {res['treatment']}", styles["Normal"]))
-        content.append(Spacer(1, 10))
-
-        temp_graph1 = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        temp_graph2 = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        fig1.savefig(temp_graph1.name)
-        fig2.savefig(temp_graph2.name)
-        temp_graph1.close()
-        temp_graph2.close()
-
-        content.append(Paragraph("<b>Graphs</b>", styles["Heading2"]))
-        content.append(RLImage(temp_graph1.name, width=400, height=250))
-        content.append(Spacer(1, 10))
-        content.append(RLImage(temp_graph2.name, width=400, height=250))
-
-        if res.get("uploaded_image_path"):
-            content.append(Spacer(1, 10))
-            content.append(Paragraph("<b>Uploaded Crop Image</b>", styles["Heading2"]))
-            content.append(RLImage(res["uploaded_image_path"], width=250, height=180))
-
-        content.append(Spacer(1, 20))
-        content.append(Paragraph("<i>A Project by Aranyak Chakraborty</i>", styles["Italic"]))
-        doc.build(content)
-
-        with open(pdf_file.name, "rb") as pdf_stream:
-            st.download_button(
-                label="Download PDF",
-                data=pdf_stream.read(),
-                file_name="RiceGenix_Report.pdf",
-                mime="application/pdf",
-                key="pdf_download",
-            )
+    pdf_bytes = build_pdf_report(res, fig1, fig2, logo_path)
+    st.download_button(
+        label="Download PDF Report",
+        data=pdf_bytes,
+        file_name="RiceGenix_Report.pdf",
+        mime="application/pdf",
+        key="pdf_download",
+        use_container_width=True,
+    )
