@@ -1,5 +1,6 @@
 import os
 import tempfile
+import base64
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -215,6 +216,25 @@ def build_pdf_report(result, fig1, fig2, logo_path):
         return pdf_stream.read()
 
 
+def build_input_signature(crop_name, height, gene_b, gene_c, gene_d, rain, temp_unit, temp_input, soil_type, water_source, fertilizer_use, manual_ph, ph_input, has_image):
+    return (
+        crop_name,
+        float(height),
+        gene_b,
+        gene_c,
+        gene_d,
+        float(rain),
+        temp_unit,
+        float(temp_input),
+        soil_type,
+        water_source,
+        fertilizer_use,
+        bool(manual_ph),
+        float(ph_input),
+        bool(has_image),
+    )
+
+
 def resolve_image_input(uploaded_file, camera_file):
     image_source = camera_file or uploaded_file
     if image_source is None:
@@ -319,6 +339,11 @@ preview_image, selected_image_source = resolve_image_input(uploaded_file, camera
 if preview_image is not None:
     st.image(preview_image, caption="Uploaded Image", use_container_width=True)
 
+current_signature = build_input_signature(
+    crop_name, height, gene_b, gene_c, gene_d, rain, temp_unit, temp_input,
+    soil_type, water_source, fertilizer_use, manual_ph, ph_input, preview_image is not None
+)
+
 if submitted:
     st.session_state.result = None
 
@@ -402,9 +427,10 @@ if submitted:
         "input_height": height_val,
         "expected_height": expected_height,
         "uploaded_image_path": uploaded_image_path,
+        "signature": current_signature,
     }
 
-if st.session_state.result:
+if st.session_state.result and st.session_state.result.get("signature") == current_signature:
     res = st.session_state.result
     disease_val = res.get("disease", 0)
     water_val = res.get("water", 0)
@@ -472,6 +498,7 @@ if st.session_state.result:
     st.pyplot(fig1)
     st.pyplot(fig2)
     pdf_bytes = build_pdf_report(res, fig1, fig2, logo_path)
+    pdf_b64 = base64.b64encode(pdf_bytes).decode()
     st.download_button(
         label="Download PDF Report",
         data=pdf_bytes,
@@ -479,4 +506,8 @@ if st.session_state.result:
         mime="application/pdf",
         key="pdf_download",
         use_container_width=True,
+    )
+    st.markdown(
+        f'<a href="data:application/pdf;base64,{pdf_b64}" download="RiceGenix_Report.pdf">If mobile download fails, tap here</a>',
+        unsafe_allow_html=True,
     )
