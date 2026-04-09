@@ -7,5 +7,5 @@ requests
 reportlab
 pillow
 
-torch==2.2.0
-torchvision==0.17.0
+torch==2.4.1
+torchvision==0.19.1
