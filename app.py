@@ -241,14 +241,13 @@ def build_pdf_report(result, fig1, fig2, logo_path):
         return pdf_stream.read()
 
 
-def build_input_signature(crop_name, height, months_observed, gene_b, gene_c, gene_d, rain, temp_unit, temp_input, soil_type, water_source, fertilizer_use, manual_ph, ph_input, has_image):
+def build_input_signature(crop_name, height, months_observed, gene_b, gene_c, rain, temp_unit, temp_input, soil_type, water_source, fertilizer_use, manual_ph, ph_input, has_image):
     return (
         crop_name,
         float(height),
         float(months_observed),
         gene_b,
         gene_c,
-        gene_d,
         float(rain),
         temp_unit,
         float(temp_input),
@@ -342,7 +341,6 @@ with st.form("prediction_form"):
     months_observed = st.number_input("Months observed after planting", min_value=0.5, max_value=12.0, value=1.0, step=0.5)
     gene_b = st.radio("Disease resistant?", ["Yes", "No"], horizontal=True)
     gene_c = st.radio("Drought tolerant?", ["Yes", "No"], horizontal=True)
-    gene_d = st.radio("Fast growth?", ["Yes", "No"], horizontal=True)
     rain = st.number_input("Annual Rainfall (mm)", min_value=0.0, value=0.0)
     temp_unit = st.selectbox("Temperature Unit", ["Celsius", "Fahrenheit"])
     temp_input = st.number_input("Average Temperature", value=0.0)
@@ -367,7 +365,7 @@ if preview_image is not None:
     st.image(preview_image, caption="Uploaded Image", use_container_width=True)
 
 current_signature = build_input_signature(
-    crop_name, height, months_observed, gene_b, gene_c, gene_d, rain, temp_unit, temp_input,
+    crop_name, height, months_observed, gene_b, gene_c, rain, temp_unit, temp_input,
     soil_type, water_source, fertilizer_use, manual_ph, ph_input, preview_image is not None
 )
 
@@ -388,12 +386,12 @@ if submitted:
     ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
     g2 = 1 if gene_b == "Yes" else 0
     g3 = 1 if gene_c == "Yes" else 0
-    g4 = 1 if gene_d == "Yes" else 0
     expected_height = rice_data[crop_name]["height"]
     growth_metrics = project_growth_metrics(crop_name, height_val, months_observed)
     projected_final_height = growth_metrics["projected_final_height"]
     expected_height_now = growth_metrics["expected_height_now"]
     maturity_months = growth_metrics["maturity_months"]
+    g4 = 1 if height_val >= expected_height_now * 1.05 or projected_final_height >= expected_height * 1.05 else 0
     g1 = 1 if projected_final_height >= expected_height else 0
 
     disease_name = "Not Checked"
