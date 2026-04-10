@@ -1,6 +1,7 @@
 import os
 import tempfile
 import base64
+import textwrap
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -454,243 +455,245 @@ def inject_custom_theme(settings, token_pack):
         """
 
     st.markdown(
-        f"""
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap');
-        {token_css}
+        textwrap.dedent(
+            f"""
+            <style>
+            @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap');
+            {token_css}
 
-        html, body, [class*="css"], .stApp {{
-            font-family: {font_family};
-            font-size: {settings['font_scale']}px;
-            color: var(--rg-text);
-        }}
+            html, body, [class*="css"], .stApp {{
+                font-family: {font_family};
+                font-size: {settings['font_scale']}px;
+                color: var(--rg-text);
+            }}
 
-        .stApp {{
-            background:
-                radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--rg-accent) 24%, transparent) 0%, transparent 34%),
-                radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--rg-accent-alt) 24%, transparent) 0%, transparent 30%),
-                linear-gradient(160deg, var(--rg-bg) 0%, var(--rg-bg-alt) 100%);
-            color: var(--rg-text);
-        }}
+            .stApp {{
+                background:
+                    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--rg-accent) 24%, transparent) 0%, transparent 34%),
+                    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--rg-accent-alt) 24%, transparent) 0%, transparent 30%),
+                    linear-gradient(160deg, var(--rg-bg) 0%, var(--rg-bg-alt) 100%);
+                color: var(--rg-text);
+            }}
 
-        [data-testid="collapsedControl"], [data-testid="stSidebar"], #MainMenu, footer, header {{
-            display: none !important;
-        }}
+            [data-testid="collapsedControl"], [data-testid="stSidebar"], #MainMenu, footer, header {{
+                display: none !important;
+            }}
 
-        .block-container {{
-            padding-top: 2rem;
-            padding-bottom: 2.5rem;
-            max-width: 1400px;
-        }}
+            .block-container {{
+                padding-top: 2rem;
+                padding-bottom: 2.5rem;
+                max-width: 1400px;
+            }}
 
-        .rg-shell {{
-            position: relative;
-            animation: rg-fade-up {motion_seconds} ease-out;
-        }}
+            .rg-shell {{
+                position: relative;
+                animation: rg-fade-up {motion_seconds} ease-out;
+            }}
 
-        .rg-hero {{
-            position: relative;
-            overflow: hidden;
-            border-radius: {radius + 10}px;
-            padding: 1.4rem 1.5rem;
-            background: linear-gradient(140deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-surface-solid) 72%, transparent) 100%);
-            border: 1px solid var(--rg-border);
-            box-shadow: var(--rg-shadow);
-            backdrop-filter: blur(18px);
-            margin-bottom: {compact_gap};
-        }}
+            .rg-hero {{
+                position: relative;
+                overflow: hidden;
+                border-radius: {radius + 10}px;
+                padding: 1.4rem 1.5rem;
+                background: linear-gradient(140deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-surface-solid) 72%, transparent) 100%);
+                border: 1px solid var(--rg-border);
+                box-shadow: var(--rg-shadow);
+                backdrop-filter: blur(18px);
+                margin-bottom: {compact_gap};
+            }}
 
-        .rg-hero::before {{
-            content: "";
-            position: absolute;
-            inset: -20% auto auto -10%;
-            width: 260px;
-            height: 260px;
-            border-radius: 999px;
-            background: radial-gradient(circle, color-mix(in srgb, var(--rg-accent) 45%, transparent) 0%, transparent 70%);
-            opacity: {glow_opacity};
-            animation: rg-float 9s ease-in-out infinite;
-            pointer-events: none;
-        }}
+            .rg-hero::before {{
+                content: "";
+                position: absolute;
+                inset: -20% auto auto -10%;
+                width: 260px;
+                height: 260px;
+                border-radius: 999px;
+                background: radial-gradient(circle, color-mix(in srgb, var(--rg-accent) 45%, transparent) 0%, transparent 70%);
+                opacity: {glow_opacity};
+                animation: rg-float 9s ease-in-out infinite;
+                pointer-events: none;
+            }}
 
-        .rg-badge {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            padding: 0.4rem 0.75rem;
-            border-radius: 999px;
-            background: color-mix(in srgb, var(--rg-accent) 14%, transparent);
-            color: var(--rg-text);
-            border: 1px solid color-mix(in srgb, var(--rg-accent) 28%, transparent);
-            font-size: 0.82rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }}
+            .rg-badge {{
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                padding: 0.4rem 0.75rem;
+                border-radius: 999px;
+                background: color-mix(in srgb, var(--rg-accent) 14%, transparent);
+                color: var(--rg-text);
+                border: 1px solid color-mix(in srgb, var(--rg-accent) 28%, transparent);
+                font-size: 0.82rem;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+            }}
 
-        .rg-title {{
-            font-family: 'Sora', sans-serif;
-            font-size: clamp(2.2rem, 4vw, 3.6rem);
-            font-weight: 800;
-            line-height: 1.02;
-            margin: 0.8rem 0 0.4rem;
-            color: var(--rg-text);
-        }}
+            .rg-title {{
+                font-family: 'Sora', sans-serif;
+                font-size: clamp(2.2rem, 4vw, 3.6rem);
+                font-weight: 800;
+                line-height: 1.02;
+                margin: 0.8rem 0 0.4rem;
+                color: var(--rg-text);
+            }}
 
-        .rg-subtitle {{
-            max-width: 760px;
-            color: var(--rg-muted);
-            line-height: 1.7;
-            margin-bottom: 0.9rem;
-        }}
+            .rg-subtitle {{
+                max-width: 760px;
+                color: var(--rg-muted);
+                line-height: 1.7;
+                margin-bottom: 0.9rem;
+            }}
 
-        .rg-card, [data-testid="stForm"], .stPopover, [data-testid="stMetric"], .stAlert, .stPlotlyChart, .element-container .stMarkdown {{
-            border-radius: {radius}px;
-        }}
+            .rg-card, [data-testid="stForm"], .stPopover, [data-testid="stMetric"], .stAlert, .stPlotlyChart, .element-container .stMarkdown {{
+                border-radius: {radius}px;
+            }}
 
-        [data-testid="stForm"], .rg-card {{
-            background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-surface-solid) 84%, transparent) 100%);
-            border: 1px solid var(--rg-border);
-            box-shadow: var(--rg-shadow);
-            backdrop-filter: blur(14px);
-            padding: 0.35rem 0.35rem 0.6rem 0.35rem;
-        }}
+            [data-testid="stForm"], .rg-card {{
+                background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-surface-solid) 84%, transparent) 100%);
+                border: 1px solid var(--rg-border);
+                box-shadow: var(--rg-shadow);
+                backdrop-filter: blur(14px);
+                padding: 0.35rem 0.35rem 0.6rem 0.35rem;
+            }}
 
-        .rg-card-inner {{
-            padding: 0.9rem 1rem;
-        }}
+            .rg-card-inner {{
+                padding: 0.9rem 1rem;
+            }}
 
-        .rg-mini-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: {compact_gap};
-            margin-top: 1rem;
-        }}
+            .rg-mini-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: {compact_gap};
+                margin-top: 1rem;
+            }}
 
-        .rg-mini-card {{
-            padding: 1rem;
-            border-radius: {radius - 6}px;
-            background: linear-gradient(180deg, color-mix(in srgb, var(--rg-accent) 11%, var(--rg-surface-solid)) 0%, var(--rg-surface) 100%);
-            border: 1px solid color-mix(in srgb, var(--rg-accent) 18%, var(--rg-border));
-            animation: rg-fade-up {motion_seconds} ease-out;
-        }}
+            .rg-mini-card {{
+                padding: 1rem;
+                border-radius: {radius - 6}px;
+                background: linear-gradient(180deg, color-mix(in srgb, var(--rg-accent) 11%, var(--rg-surface-solid)) 0%, var(--rg-surface) 100%);
+                border: 1px solid color-mix(in srgb, var(--rg-accent) 18%, var(--rg-border));
+                animation: rg-fade-up {motion_seconds} ease-out;
+            }}
 
-        .rg-mini-label {{
-            color: var(--rg-muted);
-            font-size: 0.82rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }}
+            .rg-mini-label {{
+                color: var(--rg-muted);
+                font-size: 0.82rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }}
 
-        .rg-mini-value {{
-            margin-top: 0.35rem;
-            color: var(--rg-text);
-            font-size: 1.28rem;
-            font-weight: 800;
-        }}
+            .rg-mini-value {{
+                margin-top: 0.35rem;
+                color: var(--rg-text);
+                font-size: 1.28rem;
+                font-weight: 800;
+            }}
 
-        .rg-floating-credit {{
-            position: fixed;
-            right: 1rem;
-            bottom: 1rem;
-            z-index: 9999;
-            padding: 0.72rem 1rem;
-            border-radius: 999px;
-            color: var(--rg-text);
-            background: linear-gradient(135deg, color-mix(in srgb, var(--rg-accent) 22%, var(--rg-surface-solid)) 0%, var(--rg-surface) 100%);
-            border: 1px solid color-mix(in srgb, var(--rg-accent) 34%, transparent);
-            box-shadow: var(--rg-shadow);
-            backdrop-filter: blur(12px);
-            font-size: 0.9rem;
-            font-weight: 700;
-        }}
+            .rg-floating-credit {{
+                position: fixed;
+                right: 1rem;
+                bottom: 1rem;
+                z-index: 9999;
+                padding: 0.72rem 1rem;
+                border-radius: 999px;
+                color: var(--rg-text);
+                background: linear-gradient(135deg, color-mix(in srgb, var(--rg-accent) 22%, var(--rg-surface-solid)) 0%, var(--rg-surface) 100%);
+                border: 1px solid color-mix(in srgb, var(--rg-accent) 34%, transparent);
+                box-shadow: var(--rg-shadow);
+                backdrop-filter: blur(12px);
+                font-size: 0.9rem;
+                font-weight: 700;
+            }}
 
-        .rg-section-title {{
-            font-family: 'Sora', sans-serif;
-            font-size: 1.15rem;
-            font-weight: 700;
-            margin-bottom: 0.3rem;
-        }}
+            .rg-section-title {{
+                font-family: 'Sora', sans-serif;
+                font-size: 1.15rem;
+                font-weight: 700;
+                margin-bottom: 0.3rem;
+            }}
 
-        .rg-section-copy {{
-            color: var(--rg-muted);
-            margin-bottom: 0.8rem;
-        }}
+            .rg-section-copy {{
+                color: var(--rg-muted);
+                margin-bottom: 0.8rem;
+            }}
 
-        .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {{
-            border-radius: 999px !important;
-            border: 0 !important;
-            padding: 0.82rem 1.25rem !important;
-            font-weight: 800 !important;
-            color: #06111d !important;
-            background: linear-gradient(135deg, var(--rg-accent) 0%, var(--rg-accent-alt) 100%) !important;
-            box-shadow: 0 16px 36px color-mix(in srgb, var(--rg-accent) 30%, transparent) !important;
-            transition: transform {motion_seconds} ease, box-shadow {motion_seconds} ease !important;
-        }}
+            .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {{
+                border-radius: 999px !important;
+                border: 0 !important;
+                padding: 0.82rem 1.25rem !important;
+                font-weight: 800 !important;
+                color: #06111d !important;
+                background: linear-gradient(135deg, var(--rg-accent) 0%, var(--rg-accent-alt) 100%) !important;
+                box-shadow: 0 16px 36px color-mix(in srgb, var(--rg-accent) 30%, transparent) !important;
+                transition: transform {motion_seconds} ease, box-shadow {motion_seconds} ease !important;
+            }}
 
-        .stButton > button:hover, .stDownloadButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 22px 44px color-mix(in srgb, var(--rg-accent) 40%, transparent) !important;
-        }}
+            .stButton > button:hover, .stDownloadButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 22px 44px color-mix(in srgb, var(--rg-accent) 40%, transparent) !important;
+            }}
 
-        .stSelectbox label, .stNumberInput label, .stSlider label, .stRadio label, .stFileUploader label, .stCameraInput label, .stCheckbox label {{
-            color: var(--rg-text) !important;
-            font-weight: 700 !important;
-        }}
+            .stSelectbox label, .stNumberInput label, .stSlider label, .stRadio label, .stFileUploader label, .stCameraInput label, .stCheckbox label {{
+                color: var(--rg-text) !important;
+                font-weight: 700 !important;
+            }}
 
-        .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"], .stMultiSelect [data-baseweb="select"] {{
-            border-radius: {radius - 10}px !important;
-        }}
+            .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"], .stMultiSelect [data-baseweb="select"] {{
+                border-radius: {radius - 10}px !important;
+            }}
 
-        .stTextInput input, .stNumberInput input, textarea, [data-baseweb="input"] input, [data-baseweb="select"] > div {{
-            background: color-mix(in srgb, var(--rg-surface-solid) 92%, {glass_alpha}) !important;
-            color: var(--rg-text) !important;
-            border: 1px solid var(--rg-border) !important;
-        }}
+            .stTextInput input, .stNumberInput input, textarea, [data-baseweb="input"] input, [data-baseweb="select"] > div {{
+                background: color-mix(in srgb, var(--rg-surface-solid) 92%, {glass_alpha}) !important;
+                color: var(--rg-text) !important;
+                border: 1px solid var(--rg-border) !important;
+            }}
 
-        .stMarkdown, .stCaption, p, label, span, div {{
-            color: inherit;
-        }}
+            .stMarkdown, .stCaption, p, label, span, div {{
+                color: inherit;
+            }}
 
-        [data-testid="stMetric"] {{
-            background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-accent) 6%, var(--rg-surface-solid)) 100%);
-            border: 1px solid var(--rg-border);
-            box-shadow: var(--rg-shadow);
-            padding: 1rem;
-        }}
+            [data-testid="stMetric"] {{
+                background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-accent) 6%, var(--rg-surface-solid)) 100%);
+                border: 1px solid var(--rg-border);
+                box-shadow: var(--rg-shadow);
+                padding: 1rem;
+            }}
 
-        [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
-            color: var(--rg-text) !important;
-        }}
+            [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
+                color: var(--rg-text) !important;
+            }}
 
-        .stAlert {{
-            background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-accent) 6%, var(--rg-surface-solid)) 100%) !important;
-            color: var(--rg-text) !important;
-            border: 1px solid var(--rg-border) !important;
-        }}
+            .stAlert {{
+                background: linear-gradient(180deg, var(--rg-surface) 0%, color-mix(in srgb, var(--rg-accent) 6%, var(--rg-surface-solid)) 100%) !important;
+                color: var(--rg-text) !important;
+                border: 1px solid var(--rg-border) !important;
+            }}
 
-        .rg-divider {{
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--rg-border), transparent);
-            margin: 0.85rem 0 1rem;
-        }}
+            .rg-divider {{
+                height: 1px;
+                background: linear-gradient(90deg, transparent, var(--rg-border), transparent);
+                margin: 0.85rem 0 1rem;
+            }}
 
-        .rg-settings-note {{
-            color: var(--rg-muted);
-            font-size: 0.88rem;
-            line-height: 1.5;
-        }}
+            .rg-settings-note {{
+                color: var(--rg-muted);
+                font-size: 0.88rem;
+                line-height: 1.5;
+            }}
 
-        @keyframes rg-fade-up {{
-            from {{ opacity: 0; transform: translateY(16px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
+            @keyframes rg-fade-up {{
+                from {{ opacity: 0; transform: translateY(16px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
 
-        @keyframes rg-float {{
-            0%, 100% {{ transform: translate3d(0,0,0); }}
-            50% {{ transform: translate3d(18px, 18px, 0); }}
-        }}
-        </style>
-        """,
+            @keyframes rg-float {{
+                0%, 100% {{ transform: translate3d(0,0,0); }}
+                50% {{ transform: translate3d(18px, 18px, 0); }}
+            }}
+            </style>
+            """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -710,12 +713,10 @@ def fetch_live_weather():
 
 def render_metric_cards(items):
     card_html = "".join(
-        f"""
-        <div class="rg-mini-card">
-            <div class="rg-mini-label">{item['label']}</div>
-            <div class="rg-mini-value">{item['value']}</div>
-        </div>
-        """
+        f'<div class="rg-mini-card">'
+        f'<div class="rg-mini-label">{item["label"]}</div>'
+        f'<div class="rg-mini-value">{item["value"]}</div>'
+        '</div>'
         for item in items
     )
     st.markdown(f'<div class="rg-mini-grid">{card_html}</div>', unsafe_allow_html=True)
@@ -788,22 +789,24 @@ with header_left:
     if weather_data and weather_data.get("temperature") is not None:
         weather_label = f"Live weather {weather_data['temperature']}°C"
     st.markdown(
-        f"""
-        <div class="rg-shell">
-            <div class="rg-hero">
-                <div class="rg-badge">Precision Rice Intelligence</div>
-                <div class="rg-title">RiceGenixAI</div>
-                <div class="rg-subtitle">
-                    Sleek forecasting, disease scanning, growth projection, graphs, and report export in one premium dashboard for farmers and field teams.
-                </div>
-                <div style="display:flex; gap:0.7rem; flex-wrap:wrap; margin-top:0.6rem;">
-                    <div class="rg-badge">{weather_label}</div>
-                    <div class="rg-badge">Smart growth projection enabled</div>
-                    <div class="rg-badge">PDF + AI disease analysis</div>
+        textwrap.dedent(
+            f"""
+            <div class="rg-shell">
+                <div class="rg-hero">
+                    <div class="rg-badge">Precision Rice Intelligence</div>
+                    <div class="rg-title">RiceGenixAI</div>
+                    <div class="rg-subtitle">
+                        Sleek forecasting, disease scanning, growth projection, graphs, and report export in one premium dashboard for farmers and field teams.
+                    </div>
+                    <div style="display:flex; gap:0.7rem; flex-wrap:wrap; margin-top:0.6rem;">
+                        <div class="rg-badge">{weather_label}</div>
+                        <div class="rg-badge">Smart growth projection enabled</div>
+                        <div class="rg-badge">PDF + AI disease analysis</div>
+                    </div>
                 </div>
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -820,14 +823,16 @@ main_col, side_col = st.columns([1.4, 0.8], gap="large")
 
 with side_col:
     st.markdown(
-        """
-        <div class="rg-card">
-            <div class="rg-card-inner">
-                <div class="rg-section-title">Interface Overview</div>
-                <div class="rg-section-copy">Everything below follows your in-app settings instantly, including light mode, dark mode, accent colors, rounded cards, motion, and typography.</div>
+        textwrap.dedent(
+            """
+            <div class="rg-card">
+                <div class="rg-card-inner">
+                    <div class="rg-section-title">Interface Overview</div>
+                    <div class="rg-section-copy">Everything below follows your in-app settings instantly, including light mode, dark mode, accent colors, rounded cards, motion, and typography.</div>
+                </div>
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
     overview_items = [
@@ -846,14 +851,16 @@ with side_col:
         ]
         render_metric_cards(weather_items)
     st.markdown(
-        """
-        <div class="rg-card" style="margin-top:1rem;">
-            <div class="rg-card-inner">
-                <div class="rg-section-title">Support</div>
-                <div class="rg-section-copy">Contact: 9832114844<br>Email: tamal.bot@gmail.com</div>
+        textwrap.dedent(
+            """
+            <div class="rg-card" style="margin-top:1rem;">
+                <div class="rg-card-inner">
+                    <div class="rg-section-title">Support</div>
+                    <div class="rg-section-copy">Contact: 9832114844<br>Email: tamal.bot@gmail.com</div>
+                </div>
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
     if st.button("Reset Inputs", use_container_width=True):
@@ -864,14 +871,16 @@ with side_col:
 
 with main_col:
     st.markdown(
-        """
-        <div class="rg-card">
-            <div class="rg-card-inner">
-                <div class="rg-section-title">Crop Forecast Workspace</div>
-                <div class="rg-section-copy">Enter the observation month, field conditions, and crop image. The system projects full-growth height and predicts yield before harvest.</div>
+        textwrap.dedent(
+            """
+            <div class="rg-card">
+                <div class="rg-card-inner">
+                    <div class="rg-section-title">Crop Forecast Workspace</div>
+                    <div class="rg-section-copy">Enter the observation month, field conditions, and crop image. The system projects full-growth height and predicts yield before harvest.</div>
+                </div>
             </div>
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True,
     )
 
