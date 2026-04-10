@@ -22,6 +22,31 @@ try:
 except Exception:
     SKLEARN_AVAILABLE = False
 
+
+def rgba_to_hex(color_str):
+    """Convert rgba() CSS string to hex format for matplotlib compatibility."""
+    if not isinstance(color_str, str):
+        return "#102235"  # fallback color
+    
+    color_str = color_str.strip()
+    
+    # If already a hex color, return as-is
+    if color_str.startswith("#"):
+        return color_str
+    
+    # Convert rgba() format to hex
+    if color_str.startswith("rgba"):
+        try:
+            # Extract numbers from rgba(r, g, b, a)
+            numbers = color_str.replace("rgba(", "").replace(")", "").split(",")
+            r, g, b = int(numbers[0].strip()), int(numbers[1].strip()), int(numbers[2].strip())
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except (ValueError, IndexError):
+            return "#102235"  # fallback color
+    
+    # Return as-is if it's a named color or valid format
+    return color_str
+
 st.set_page_config(page_title="RiceGenixAI", layout="wide", initial_sidebar_state="collapsed")
 
 rice_data = {
@@ -162,6 +187,11 @@ def generate_graphs(result):
             "accent_soft": "#76e4bc",
         },
     )
+    
+    # Sanitize colors for matplotlib compatibility
+    theme_tokens = {
+        k: rgba_to_hex(v) for k, v in theme_tokens.items()
+    }
 
     plt.style.use("default")
     fig1, ax1 = plt.subplots()
