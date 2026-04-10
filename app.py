@@ -25,20 +25,20 @@ except Exception:
 st.set_page_config(page_title="RiceGenixAI", layout="centered")
 
 rice_data = {
-    "Gobindobhog": {"height": 51, "drought": 0, "disease": 1},
-    "Swarna": {"height": 39, "drought": 0, "disease": 1},
-    "Swarna Sub1": {"height": 39, "drought": 0, "disease": 1},
-    "IR36": {"height": 35, "drought": 0, "disease": 1},
-    "IR64": {"height": 39, "drought": 1, "disease": 1},
-    "Minikit": {"height": 35, "drought": 0, "disease": 1},
-    "Banskathi": {"height": 55, "drought": 1, "disease": 0},
-    "Tulaipanji": {"height": 55, "drought": 0, "disease": 1},
-    "Kalijeera": {"height": 50, "drought": 0, "disease": 1},
-    "Radhatilak": {"height": 52, "drought": 0, "disease": 1},
-    "Dudheswar": {"height": 50, "drought": 0, "disease": 1},
-    "Kataribhog": {"height": 48, "drought": 0, "disease": 1},
-    "Radhunipagal": {"height": 52, "drought": 0, "disease": 1},
-    "Badshabhog": {"height": 50, "drought": 0, "disease": 1},
+    "Gobindobhog": {"height": 51, "drought": 0, "disease": 1, "maturity_months": 4.5},
+    "Swarna": {"height": 39, "drought": 0, "disease": 1, "maturity_months": 4.0},
+    "Swarna Sub1": {"height": 39, "drought": 0, "disease": 1, "maturity_months": 4.0},
+    "IR36": {"height": 35, "drought": 0, "disease": 1, "maturity_months": 3.8},
+    "IR64": {"height": 39, "drought": 1, "disease": 1, "maturity_months": 4.0},
+    "Minikit": {"height": 35, "drought": 0, "disease": 1, "maturity_months": 3.8},
+    "Banskathi": {"height": 55, "drought": 1, "disease": 0, "maturity_months": 5.0},
+    "Tulaipanji": {"height": 55, "drought": 0, "disease": 1, "maturity_months": 5.0},
+    "Kalijeera": {"height": 50, "drought": 0, "disease": 1, "maturity_months": 4.8},
+    "Radhatilak": {"height": 52, "drought": 0, "disease": 1, "maturity_months": 4.8},
+    "Dudheswar": {"height": 50, "drought": 0, "disease": 1, "maturity_months": 4.8},
+    "Kataribhog": {"height": 48, "drought": 0, "disease": 1, "maturity_months": 4.8},
+    "Radhunipagal": {"height": 52, "drought": 0, "disease": 1, "maturity_months": 4.8},
+    "Badshabhog": {"height": 50, "drought": 0, "disease": 1, "maturity_months": 4.8},
 }
 
 treatment_map = {
@@ -82,6 +82,28 @@ def crop_health(g2, rain, temp):
     disease = 1 if g2 == 0 else 0
     water = 1 if rain < 120 or temp > 42 else 0
     return disease, water
+
+
+def project_growth_metrics(crop_name, actual_height, months_observed):
+    crop_info = rice_data[crop_name]
+    expected_final_height = float(crop_info["height"])
+    maturity_months = float(crop_info["maturity_months"])
+    normalized_months = max(0.5, min(float(months_observed), maturity_months))
+    growth_ratio = min(normalized_months / maturity_months, 1.0)
+    expected_height_now = expected_final_height * growth_ratio
+
+    raw_projected_height = actual_height / growth_ratio
+    projected_final_height = max(
+        actual_height,
+        min(expected_final_height * 1.35, raw_projected_height * 0.6 + expected_final_height * 0.4),
+    )
+
+    return {
+        "maturity_months": maturity_months,
+        "expected_height_now": expected_height_now,
+        "projected_final_height": projected_final_height,
+        "growth_ratio": growth_ratio,
+    }
 
 
 @st.cache_resource
@@ -175,8 +197,11 @@ def build_pdf_report(result, fig1, fig2, logo_path):
     content.append(Paragraph(f"<b>Rainfall:</b> {result['rain']} mm", styles["Normal"]))
     content.append(Paragraph(f"<b>Temperature:</b> {result['temp']:.2f} C", styles["Normal"]))
     content.append(Paragraph(f"<b>Soil pH:</b> {result['ph']:.2f}", styles["Normal"]))
+    content.append(Paragraph(f"<b>Months Observed:</b> {result['months_observed']:.1f}", styles["Normal"]))
     content.append(Paragraph(f"<b>Expected Height:</b> {result['expected_height']} inches", styles["Normal"]))
+    content.append(Paragraph(f"<b>Expected Height Now:</b> {result['expected_height_now']:.2f} inches", styles["Normal"]))
     content.append(Paragraph(f"<b>Your Crop Height:</b> {result['input_height']} inches", styles["Normal"]))
+    content.append(Paragraph(f"<b>Predicted Final Height:</b> {result['projected_final_height']:.2f} inches", styles["Normal"]))
     content.append(Paragraph(f"<b>Height Status:</b> {result['height_flag']}", styles["Normal"]))
     content.append(Spacer(1, 10))
     content.append(Paragraph("<b>Gene Representation</b>", styles["Heading2"]))
@@ -216,10 +241,11 @@ def build_pdf_report(result, fig1, fig2, logo_path):
         return pdf_stream.read()
 
 
-def build_input_signature(crop_name, height, gene_b, gene_c, gene_d, rain, temp_unit, temp_input, soil_type, water_source, fertilizer_use, manual_ph, ph_input, has_image):
+def build_input_signature(crop_name, height, months_observed, gene_b, gene_c, gene_d, rain, temp_unit, temp_input, soil_type, water_source, fertilizer_use, manual_ph, ph_input, has_image):
     return (
         crop_name,
         float(height),
+        float(months_observed),
         gene_b,
         gene_c,
         gene_d,
@@ -313,6 +339,7 @@ st.subheader("Plant Characteristics and Soil Details")
 with st.form("prediction_form"):
     crop_name = st.selectbox("Select Rice Variety", list(rice_data.keys()))
     height = st.number_input("Enter plant height (in inches)", min_value=0.0, value=0.0)
+    months_observed = st.number_input("Months observed after planting", min_value=0.5, max_value=12.0, value=1.0, step=0.5)
     gene_b = st.radio("Disease resistant?", ["Yes", "No"], horizontal=True)
     gene_c = st.radio("Drought tolerant?", ["Yes", "No"], horizontal=True)
     gene_d = st.radio("Fast growth?", ["Yes", "No"], horizontal=True)
@@ -340,7 +367,7 @@ if preview_image is not None:
     st.image(preview_image, caption="Uploaded Image", use_container_width=True)
 
 current_signature = build_input_signature(
-    crop_name, height, gene_b, gene_c, gene_d, rain, temp_unit, temp_input,
+    crop_name, height, months_observed, gene_b, gene_c, gene_d, rain, temp_unit, temp_input,
     soil_type, water_source, fertilizer_use, manual_ph, ph_input, preview_image is not None
 )
 
@@ -363,7 +390,11 @@ if submitted:
     g3 = 1 if gene_c == "Yes" else 0
     g4 = 1 if gene_d == "Yes" else 0
     expected_height = rice_data[crop_name]["height"]
-    g1 = 1 if height_val >= expected_height else 0
+    growth_metrics = project_growth_metrics(crop_name, height_val, months_observed)
+    projected_final_height = growth_metrics["projected_final_height"]
+    expected_height_now = growth_metrics["expected_height_now"]
+    maturity_months = growth_metrics["maturity_months"]
+    g1 = 1 if projected_final_height >= expected_height else 0
 
     disease_name = "Not Checked"
     image_for_report = None
@@ -379,14 +410,14 @@ if submitted:
     disease, water = crop_health(g2, rain_val, temp_val)
     final_pred = float(base_pred)
 
-    if height_val < expected_height:
+    if projected_final_height < expected_height:
         final_pred -= 0.7
-        height_flag = "Short growth detected -> yield may decrease."
-    elif height_val > expected_height + 10:
+        height_flag = "Projected full growth is below standard -> yield may decrease."
+    elif projected_final_height > expected_height + 10:
         final_pred -= 0.3
-        height_flag = "Overgrowth detected -> possible nutrient imbalance."
+        height_flag = "Projected overgrowth detected -> possible nutrient imbalance."
     else:
-        height_flag = "Normal growth."
+        height_flag = "Projected full growth looks normal."
 
     if disease:
         final_pred -= 0.8
@@ -425,6 +456,10 @@ if submitted:
         "crop_name": crop_name,
         "height_flag": height_flag,
         "input_height": height_val,
+        "months_observed": float(months_observed),
+        "maturity_months": maturity_months,
+        "expected_height_now": expected_height_now,
+        "projected_final_height": projected_final_height,
         "expected_height": expected_height,
         "uploaded_image_path": uploaded_image_path,
         "signature": current_signature,
@@ -438,8 +473,12 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
     st.success(f"Predicted Yield: {res['yield']:.2f} tons/hectare")
     st.write(f"Soil pH: {res['ph']:.2f}")
     st.write(f"Crop Selected: {res['crop_name']}")
+    st.write(f"Month of Observation: {res['months_observed']:.1f} month(s)")
+    st.write(f"Estimated Full Growth Time: {res['maturity_months']:.1f} month(s)")
     st.write(f"Expected Height: {res['expected_height']} inches")
+    st.write(f"Expected Height At This Month: {res['expected_height_now']:.2f} inches")
     st.write(f"Your Crop Height: {res['input_height']} inches")
+    st.write(f"Predicted Final Height: {res['projected_final_height']:.2f} inches")
     st.write(res["height_flag"])
 
     st.subheader("Gene Representation")
@@ -464,10 +503,10 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
     elif res["disease_name"] == "Healthy":
         st.write(res["treatment"])
 
-    if res["input_height"] < res["expected_height"]:
-        st.write("Plant growth is below expected -> improve nitrogen supply and irrigation.")
-    elif res["input_height"] > res["expected_height"] + 10:
-        st.write("Excessive growth -> reduce nitrogen and balance nutrients.")
+    if res["projected_final_height"] < res["expected_height"]:
+        st.write("Projected growth is below expected -> improve nitrogen supply and irrigation.")
+    elif res["projected_final_height"] > res["expected_height"] + 10:
+        st.write("Projected excessive growth -> reduce nitrogen and balance nutrients.")
 
     if res["ph"] < 5.5:
         st.write("Soil is acidic -> add lime or dolomite to increase pH.")
