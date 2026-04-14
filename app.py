@@ -834,15 +834,6 @@ def resolve_image_input(uploaded_file, camera_file):
     return image, image_source
 
 
-@st.cache_data
-def load_logo_data_uri(path):
-    if not os.path.exists(path):
-        return ""
-    with open(path, "rb") as image_file:
-        encoded = base64.b64encode(image_file.read()).decode()
-    return f"data:image/png;base64,{encoded}"
-
-
 def default_ui_settings():
     return {
         "theme_mode": "System Default",
@@ -856,104 +847,6 @@ def default_ui_settings():
         "hero_glow": True,
         "language": "English",
     }
-
-
-def render_home_page(logo_data_uri):
-    welcome_language = st.session_state.ui_settings["language"] if "ui_settings" in st.session_state else "English"
-    home_html = f"""
-    <style>
-    .home-shell {{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 70vh;
-        padding: 2rem 0;
-    }}
-    .home-card {{
-        width: 100%;
-        max-width: 860px;
-        border-radius: 32px;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.12);
-        box-shadow: 0 30px 90px rgba(0,0,0,0.18);
-        backdrop-filter: blur(18px);
-        padding: 2.4rem;
-        text-align: center;
-        animation: home-fade 1s ease forwards;
-    }}
-    .home-logo {{
-        width: 12rem;
-        height: auto;
-        margin: 0 auto 1.5rem;
-        animation: home-bounce 1.4s ease infinite;
-    }}
-    .home-title {{
-        font-family: 'Sora', sans-serif;
-        font-size: clamp(3.2rem, 5vw, 4.4rem);
-        margin: 0.2rem 0 0.5rem;
-        letter-spacing: 0.01em;
-        animation: home-title-pop 0.75s ease forwards;
-    }}
-    .home-welcome {{
-        font-family: 'Poppins', sans-serif;
-        font-size: clamp(1.2rem, 2vw, 1.7rem);
-        margin: 0.4rem 0 1.35rem;
-        color: rgba(13, 26, 41, 0.8);
-        animation: home-subtext 1s ease 0.4s forwards;
-        opacity: 0;
-    }}
-    .home-action {{
-        display: inline-flex;
-        flex-direction: column;
-        gap: 1rem;
-        margin-top: 2rem;
-        align-items: center;
-    }}
-    .home-lead {{
-        font-size: 1rem;
-        color: rgba(13, 26, 41, 0.72);
-        margin-bottom: 0.5rem;
-    }}
-    @keyframes home-fade {{
-        from {{ opacity: 0; transform: translateY(18px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    @keyframes home-bounce {{
-        0%,100% {{ transform: translateY(0); }}
-        50% {{ transform: translateY(-12px); }}
-    }}
-    @keyframes home-title-pop {{
-        from {{ transform: scale(0.95); opacity: 0; }}
-        to {{ transform: scale(1); opacity: 1; }}
-    }}
-    @keyframes home-subtext {{
-        to {{ opacity: 1; }}
-    }}
-    </style>
-    <div class="home-shell">
-        <div class="home-card">
-            <img src="{logo_data_uri}" class="home-logo" alt="RiceGenixAI Logo" />
-            <div class="home-title">RiceGenixAI</div>
-            <div class="home-welcome">{t('home_welcome')}</div>
-            <div class="home-lead">{t('home_subtitle')}</div>
-        </div>
-    </div>
-    """
-
-    st.markdown(home_html, unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown(f"<h3 style='text-align:center; margin-bottom: 0.35rem;'>{t('home_choose_language')}</h3>", unsafe_allow_html=True)
-    selected_language = st.selectbox(
-        t('language'),
-        LANGUAGE_OPTIONS,
-        index=LANGUAGE_OPTIONS.index(welcome_language) if welcome_language in LANGUAGE_OPTIONS else 0,
-        format_func=lambda value: t(f"language_{value.lower()}"),
-        key='home_language_select'
-    )
-    st.session_state.ui_settings['language'] = selected_language
-    if st.button(t('start_button'), use_container_width=False):
-        st.session_state.page = 'app'
-        st.experimental_rerun()
 
 
 def get_theme_tokens(theme_mode, accent_palette):
@@ -1327,21 +1220,9 @@ yield_model = get_yield_model()
 if "result" not in st.session_state:
     st.session_state.result = None
 
-logo_path = "assets/logo.png"
-logo_data_uri = load_logo_data_uri(logo_path)
 weather_data = fetch_live_weather()
 if "ui_settings" not in st.session_state:
     st.session_state.ui_settings = default_ui_settings()
-
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-
-logo_path = "assets/logo.png"
-logo_data_uri = load_logo_data_uri(logo_path)
-
-if st.session_state.page == "home":
-    render_home_page(logo_data_uri)
-    st.stop()
 
 header_left, header_right = st.columns([7, 2])
 with header_right:
@@ -1767,6 +1648,7 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         st.pyplot(fig1, use_container_width=True)
     with graph_b:
         st.pyplot(fig2, use_container_width=True)
+    logo_path = "assets/logo.png"
     pdf_bytes = build_pdf_report(res, fig1, fig2, logo_path)
     pdf_b64 = base64.b64encode(pdf_bytes).decode()
     st.download_button(
