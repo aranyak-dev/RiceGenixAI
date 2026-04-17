@@ -30,6 +30,9 @@ except Exception:
     SKLEARN_AVAILABLE = False
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 def rgba_to_hex(color_str):
     """Convert rgba() CSS string to hex format for matplotlib compatibility."""
     if not isinstance(color_str, str):
@@ -1265,7 +1268,7 @@ if "ui_settings" not in st.session_state:
 if "ui_draft" not in st.session_state:
     st.session_state.ui_draft = copy.deepcopy(st.session_state.ui_settings)
 
-logo_path = "assets/logo.png"
+logo_path = os.path.join(BASE_DIR, "assets", "logo.png")
 logo_data_uri = load_logo_data_uri(logo_path)
 intro_tone = build_tone_data_uri(660, 180)
 home_tone = build_tone_data_uri(520, 220)
@@ -1277,14 +1280,29 @@ if st.session_state.screen == "splash":
             <style>
             .stApp {{ background:#000000 !important; }}
             [data-testid="collapsedControl"], [data-testid="stSidebar"], #MainMenu, footer, header {{ display:none !important; }}
-            .block-container {{ padding-top:2rem; max-width:1100px; }}
-            .intro-wrap {{ min-height:88vh; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; color:#f8fbff; }}
+            .block-container {{ padding-top:0 !important; padding-bottom:0 !important; max-width:1100px; }}
+            .intro-wrap {{ min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; color:#f8fbff; padding:2rem 1.25rem 6.5rem 1.25rem; }}
             .intro-title {{ font-family:'Sora', sans-serif; font-size:clamp(2.8rem, 8vw, 5.4rem); font-weight:800; letter-spacing:0.08em; margin:0; }}
             .intro-title span {{ display:inline-block; opacity:0; transform:translateY(18px) scale(0.96); animation:intro-letter 0.55s ease forwards; }}
             .intro-logo {{ width:110px; height:110px; margin:1.4rem auto 0.8rem; border-radius:26px; box-shadow:0 18px 60px rgba(255,255,255,0.12); opacity:0; animation:intro-logo 0.8s ease 1.9s forwards; }}
             .intro-copy {{ color:#b9c3d1; margin-top:0.8rem; opacity:0; animation:intro-logo 0.8s ease 2.1s forwards; }}
             .intro-loading {{ margin-top:1.4rem; color:#7ef0bb; font-weight:700; letter-spacing:0.18em; opacity:0; animation:intro-logo 0.8s ease 2.4s forwards; }}
             .intro-loading::after {{ content:""; animation:dots 1.4s steps(4,end) infinite; }}
+
+            /* Keep Streamlit progress bar pinned inside one screen */
+            div[data-testid="stProgress"] {{
+                position: fixed;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 24px;
+                width: min(720px, calc(100vw - 48px));
+                z-index: 9999;
+            }}
+            div[data-testid="stProgress"] > div {{
+                border-radius: 999px;
+                overflow: hidden;
+            }}
+
             @keyframes intro-letter {{ to {{ opacity:1; transform:translateY(0) scale(1); }} }}
             @keyframes intro-logo {{ to {{ opacity:1; transform:translateY(0); }} }}
             @keyframes dots {{ 0% {{ content:""; }} 25% {{ content:"."; }} 50% {{ content:".."; }} 75% {{ content:"..."; }} 100% {{ content:""; }} }}
@@ -1300,19 +1318,12 @@ if st.session_state.screen == "splash":
         ),
         unsafe_allow_html=True,
     )
-    _, center_col, _ = st.columns([1.2, 1, 1.2])
-    with center_col:
-        progress_text = st.empty()
-        progress_text.markdown(
-            "<div style='text-align:center; color:#9fb3c6; font-weight:700; letter-spacing:0.08em; margin-bottom:0.5rem;'>Initializing RiceGenixAI...</div>",
-            unsafe_allow_html=True,
-        )
-        progress_bar = st.progress(0, text="Loading experience...")
-        for step in range(100):
-            time.sleep(0.05)
-            progress_bar.progress(step + 1, text=f"Loading experience... {step + 1}%")
-        st.session_state.screen = "home"
-        st.rerun()
+    progress_bar = st.progress(0, text="Loading...")
+    for step in range(100):
+        time.sleep(0.05)
+        progress_bar.progress(step + 1, text="Loading...")
+    st.session_state.screen = "home"
+    st.rerun()
     st.stop()
 
 if st.session_state.screen == "home":
@@ -1320,11 +1331,15 @@ if st.session_state.screen == "home":
         textwrap.dedent(
             f"""
             <style>
-            .home-wrap {{ min-height:85vh; display:flex; align-items:center; justify-content:center; }}
-            .home-card {{ width:min(760px, 100%); padding:2rem; border-radius:32px; background:linear-gradient(180deg, rgba(10,19,31,0.92) 0%, rgba(17,33,50,0.86) 100%); border:1px solid rgba(255,255,255,0.1); box-shadow:0 30px 90px rgba(0,0,0,0.35); text-align:center; color:#f8fbff; }}
-            .home-logo {{ width:120px; height:120px; border-radius:28px; margin-bottom:1rem; box-shadow:0 18px 52px rgba(34,211,238,0.22); }}
+            .block-container {{ padding-top:0.5rem !important; padding-bottom:0.75rem !important; max-width:1100px; }}
+            .home-wrap {{ min-height:calc(100vh - 160px); display:flex; align-items:center; justify-content:center; }}
+            .home-card {{ width:min(760px, 100%); padding:1.6rem; border-radius:32px; background:linear-gradient(180deg, rgba(10,19,31,0.92) 0%, rgba(17,33,50,0.86) 100%); border:1px solid rgba(255,255,255,0.1); box-shadow:0 30px 90px rgba(0,0,0,0.35); text-align:center; color:#f8fbff; }}
+            .home-logo {{ width:108px; height:108px; border-radius:26px; margin-bottom:0.85rem; box-shadow:0 18px 52px rgba(34,211,238,0.22); }}
             .home-title {{ font-family:'Sora', sans-serif; font-size:clamp(2rem, 5vw, 3.2rem); margin:0 0 0.6rem 0; }}
-            .home-copy {{ color:#a9b9c9; max-width:560px; margin:0 auto 1.4rem auto; line-height:1.7; }}
+            .home-copy {{ color:#a9b9c9; max-width:560px; margin:0 auto 0 auto; line-height:1.7; }}
+            /* Tighten widget spacing on the home screen */
+            div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stSelectbox"]) {{ margin-top: 0.6rem !important; }}
+            div[data-testid="stVerticalBlock"] > div:has(> div.stButton) {{ margin-top: 0.35rem !important; }}
             </style>
             <audio autoplay><source src="{home_tone}" type="audio/wav"></audio>
             <div class="home-wrap">
@@ -1338,16 +1353,18 @@ if st.session_state.screen == "home":
         ),
         unsafe_allow_html=True,
     )
-    st.session_state.ui_draft["language"] = st.selectbox(
-        t("language"),
-        LANGUAGE_OPTIONS,
-        index=LANGUAGE_OPTIONS.index(st.session_state.ui_draft.get("language", "English")),
-        format_func=lambda value: t(f"language_{value.lower()}") if value in LANGUAGE_OPTIONS else value,
-    )
-    if st.button("Start", use_container_width=True):
-        st.session_state.ui_settings["language"] = st.session_state.ui_draft["language"]
-        st.session_state.screen = "app"
-        st.rerun()
+    _, center_col, _ = st.columns([1.2, 1.6, 1.2])
+    with center_col:
+        st.session_state.ui_draft["language"] = st.selectbox(
+            t("language"),
+            LANGUAGE_OPTIONS,
+            index=LANGUAGE_OPTIONS.index(st.session_state.ui_draft.get("language", "English")),
+            format_func=lambda value: t(f"language_{value.lower()}") if value in LANGUAGE_OPTIONS else value,
+        )
+        if st.button("Start", use_container_width=True):
+            st.session_state.ui_settings["language"] = st.session_state.ui_draft["language"]
+            st.session_state.screen = "app"
+            st.rerun()
     st.stop()
 
 header_left, header_right = st.columns([7, 2])
