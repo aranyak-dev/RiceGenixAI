@@ -2,6 +2,12 @@ import os
 import tempfile
 import base64
 import textwrap
+import copy
+import io
+import math
+import struct
+import time
+import wave
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -834,6 +840,37 @@ def resolve_image_input(uploaded_file, camera_file):
     return image, image_source
 
 
+@st.cache_data
+def load_logo_data_uri(path):
+    if not os.path.exists(path):
+        return ""
+    with open(path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode()
+    return f"data:image/png;base64,{encoded}"
+
+
+@st.cache_data
+def build_tone_data_uri(frequency=660, duration_ms=180, volume=0.22):
+    sample_rate = 22050
+    frames = []
+    total_samples = int(sample_rate * duration_ms / 1000)
+    for index in range(total_samples):
+        envelope = min(index / max(total_samples * 0.15, 1), 1.0)
+        envelope *= max(0.0, 1.0 - index / max(total_samples, 1))
+        sample = volume * envelope * math.sin(2 * math.pi * frequency * index / sample_rate)
+        frames.append(struct.pack("<h", int(sample * 32767)))
+
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"".join(frames))
+
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:audio/wav;base64,{encoded}"
+
+
 def default_ui_settings():
     return {
         "theme_mode": "System Default",
@@ -1219,64 +1256,136 @@ yield_model = get_yield_model()
 
 if "result" not in st.session_state:
     st.session_state.result = None
+if "screen" not in st.session_state:
+    st.session_state.screen = "splash"
 
 weather_data = fetch_live_weather()
 if "ui_settings" not in st.session_state:
     st.session_state.ui_settings = default_ui_settings()
+if "ui_draft" not in st.session_state:
+    st.session_state.ui_draft = copy.deepcopy(st.session_state.ui_settings)
+
+logo_path = "assets/logo.png"
+logo_data_uri = load_logo_data_uri(logo_path)
+intro_tone = build_tone_data_uri(660, 180)
+home_tone = build_tone_data_uri(520, 220)
+
+if st.session_state.screen == "splash":
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <style>
+            .stApp {{ background:#000000 !important; }}
+            [data-testid="collapsedControl"], [data-testid="stSidebar"], #MainMenu, footer, header {{ display:none !important; }}
+            .block-container {{ padding-top:2rem; max-width:1100px; }}
+            .intro-wrap {{ min-height:88vh; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; color:#f8fbff; }}
+            .intro-title {{ font-family:'Sora', sans-serif; font-size:clamp(2.8rem, 8vw, 5.4rem); font-weight:800; letter-spacing:0.08em; margin:0; }}
+            .intro-title span {{ display:inline-block; opacity:0; transform:translateY(18px) scale(0.96); animation:intro-letter 0.55s ease forwards; }}
+            .intro-logo {{ width:110px; height:110px; margin:1.4rem auto 0.8rem; border-radius:26px; box-shadow:0 18px 60px rgba(255,255,255,0.12); opacity:0; animation:intro-logo 0.8s ease 1.9s forwards; }}
+            .intro-copy {{ color:#b9c3d1; margin-top:0.8rem; opacity:0; animation:intro-logo 0.8s ease 2.1s forwards; }}
+            .intro-loading {{ margin-top:1.4rem; color:#7ef0bb; font-weight:700; letter-spacing:0.18em; opacity:0; animation:intro-logo 0.8s ease 2.4s forwards; }}
+            .intro-loading::after {{ content:""; animation:dots 1.4s steps(4,end) infinite; }}
+            @keyframes intro-letter {{ to {{ opacity:1; transform:translateY(0) scale(1); }} }}
+            @keyframes intro-logo {{ to {{ opacity:1; transform:translateY(0); }} }}
+            @keyframes dots {{ 0% {{ content:""; }} 25% {{ content:"."; }} 50% {{ content:".."; }} 75% {{ content:"..."; }} 100% {{ content:""; }} }}
+            </style>
+            <audio autoplay><source src="{intro_tone}" type="audio/wav"></audio>
+            <div class="intro-wrap">
+                <h1 class="intro-title">{''.join(f'<span style="animation-delay:{0.12 * idx:.2f}s">{char}</span>' for idx, char in enumerate("RiceGenixAI"))}</h1>
+                {'<img class="intro-logo" src="' + logo_data_uri + '" alt="RiceGenixAI logo">' if logo_data_uri else ''}
+                <div class="intro-copy">Created by Aranyak Chakraborty</div>
+                <div class="intro-loading">LOADING</div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+    _, center_col, _ = st.columns([1.2, 1, 1.2])
+    with center_col:
+        progress_text = st.empty()
+        progress_text.markdown(
+            "<div style='text-align:center; color:#9fb3c6; font-weight:700; letter-spacing:0.08em; margin-bottom:0.5rem;'>Initializing RiceGenixAI...</div>",
+            unsafe_allow_html=True,
+        )
+        progress_bar = st.progress(0, text="Loading experience...")
+        for step in range(100):
+            time.sleep(0.05)
+            progress_bar.progress(step + 1, text=f"Loading experience... {step + 1}%")
+        st.session_state.screen = "home"
+        st.rerun()
+    st.stop()
+
+if st.session_state.screen == "home":
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <style>
+            .home-wrap {{ min-height:85vh; display:flex; align-items:center; justify-content:center; }}
+            .home-card {{ width:min(760px, 100%); padding:2rem; border-radius:32px; background:linear-gradient(180deg, rgba(10,19,31,0.92) 0%, rgba(17,33,50,0.86) 100%); border:1px solid rgba(255,255,255,0.1); box-shadow:0 30px 90px rgba(0,0,0,0.35); text-align:center; color:#f8fbff; }}
+            .home-logo {{ width:120px; height:120px; border-radius:28px; margin-bottom:1rem; box-shadow:0 18px 52px rgba(34,211,238,0.22); }}
+            .home-title {{ font-family:'Sora', sans-serif; font-size:clamp(2rem, 5vw, 3.2rem); margin:0 0 0.6rem 0; }}
+            .home-copy {{ color:#a9b9c9; max-width:560px; margin:0 auto 1.4rem auto; line-height:1.7; }}
+            </style>
+            <audio autoplay><source src="{home_tone}" type="audio/wav"></audio>
+            <div class="home-wrap">
+                <div class="home-card">
+                    {'<img class="home-logo" src="' + logo_data_uri + '" alt="RiceGenixAI logo">' if logo_data_uri else ''}
+                    <div class="home-title">Welcome to RiceGenixAI</div>
+                    <div class="home-copy">Smart yield prediction, disease detection, growth projection, weather support, and PDF reporting in one streamlined workspace.</div>
+                </div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+    st.session_state.ui_draft["language"] = st.selectbox(
+        t("language"),
+        LANGUAGE_OPTIONS,
+        index=LANGUAGE_OPTIONS.index(st.session_state.ui_draft.get("language", "English")),
+        format_func=lambda value: t(f"language_{value.lower()}") if value in LANGUAGE_OPTIONS else value,
+    )
+    if st.button("Start", use_container_width=True):
+        st.session_state.ui_settings["language"] = st.session_state.ui_draft["language"]
+        st.session_state.screen = "app"
+        st.rerun()
+    st.stop()
 
 header_left, header_right = st.columns([7, 2])
 with header_right:
     with st.expander(t("settings_title"), expanded=False):
-        st.session_state.ui_settings["theme_mode"] = st.selectbox(
-            t("theme_mode"),
-            ["System Default", "Dark", "Light"],
-            index=["System Default", "Dark", "Light"].index(st.session_state.ui_settings["theme_mode"]),
-            format_func=lambda value: t(f"theme_{value.lower().replace(' ', '_')}") if value in ["System Default", "Dark", "Light"] else value,
-        )
-        st.session_state.ui_settings["accent_palette"] = st.selectbox(
-            t("accent_palette"),
-            ["Aurora", "Ocean", "Sunset", "Royal"],
-            index=["Aurora", "Ocean", "Sunset", "Royal"].index(st.session_state.ui_settings["accent_palette"]),
-        )
-        st.session_state.ui_settings["font_family"] = st.selectbox(
-            t("font_family"),
-            ["Manrope", "Sora", "Poppins"],
-            index=["Manrope", "Sora", "Poppins"].index(st.session_state.ui_settings["font_family"]),
-        )
-        st.session_state.ui_settings["font_scale"] = st.slider(t("font_size"), 14, 20, st.session_state.ui_settings["font_scale"])
-        st.session_state.ui_settings["radius"] = st.slider(t("card_roundness"), 16, 34, st.session_state.ui_settings["radius"])
-        st.session_state.ui_settings["surface_style"] = st.selectbox(
-            t("surface_style"),
-            ["Glass", "Solid"],
-            index=["Glass", "Solid"].index(st.session_state.ui_settings["surface_style"]),
-            format_func=lambda value: t(f"surface_{value.lower()}") if value in ["Glass", "Solid"] else value,
-        )
-        st.session_state.ui_settings["motion"] = st.selectbox(
-            t("animation_style"),
-            ["Dynamic", "Minimal"],
-            index=["Dynamic", "Minimal"].index(st.session_state.ui_settings["motion"]),
-            format_func=lambda value: t(f"motion_{value.lower()}") if value in ["Dynamic", "Minimal"] else value,
-        )
-        st.session_state.ui_settings["layout_density"] = st.selectbox(
-            t("layout_density"),
-            ["Comfortable", "Compact"],
-            index=["Comfortable", "Compact"].index(st.session_state.ui_settings["layout_density"]),
-            format_func=lambda value: t(f"density_{value.lower()}") if value in ["Comfortable", "Compact"] else value,
-        )
-        st.session_state.ui_settings["language"] = st.selectbox(
-            t("language"),
-            LANGUAGE_OPTIONS,
-            index=LANGUAGE_OPTIONS.index(st.session_state.ui_settings["language"]),
-            format_func=lambda value: t(f"language_{value.lower()}") if value in LANGUAGE_OPTIONS else value,
-        )
-        st.session_state.ui_settings["hero_glow"] = st.checkbox(t("ambient_glow"), value=st.session_state.ui_settings["hero_glow"])
-        if st.button(t("reset_interface"), use_container_width=True):
-            st.session_state.ui_settings = default_ui_settings()
+        with st.form("ui_settings_form"):
+            draft_theme = st.selectbox(
+                t("theme_mode"),
+                ["System Default", "Dark", "Light"],
+                index=["System Default", "Dark", "Light"].index(st.session_state.ui_draft.get("theme_mode", st.session_state.ui_settings["theme_mode"])),
+                format_func=lambda value: t(f"theme_{value.lower().replace(' ', '_')}") if value in ["System Default", "Dark", "Light"] else value,
+            )
+            draft_accent = st.selectbox(
+                t("accent_palette"),
+                ["Aurora", "Ocean", "Sunset", "Royal"],
+                index=["Aurora", "Ocean", "Sunset", "Royal"].index(st.session_state.ui_draft.get("accent_palette", st.session_state.ui_settings["accent_palette"])),
+            )
+            draft_language = st.selectbox(
+                t("language"),
+                LANGUAGE_OPTIONS,
+                index=LANGUAGE_OPTIONS.index(st.session_state.ui_draft.get("language", st.session_state.ui_settings["language"])),
+                format_func=lambda value: t(f"language_{value.lower()}") if value in LANGUAGE_OPTIONS else value,
+            )
+            apply_settings = st.form_submit_button("Apply", use_container_width=True)
+        if apply_settings:
+            st.session_state.ui_draft["theme_mode"] = draft_theme
+            st.session_state.ui_draft["accent_palette"] = draft_accent
+            st.session_state.ui_draft["language"] = draft_language
+            st.session_state.ui_settings["theme_mode"] = draft_theme
+            st.session_state.ui_settings["accent_palette"] = draft_accent
+            st.session_state.ui_settings["language"] = draft_language
             st.rerun()
-        st.markdown(
-            '<div class="rg-settings-note">Your theme setting now controls the whole in-app appearance, so you no longer need to switch Streamlit theme separately.</div>',
-            unsafe_allow_html=True,
-        )
+        if st.button(t("reset_interface"), use_container_width=True):
+            defaults = default_ui_settings()
+            st.session_state.ui_settings = defaults
+            st.session_state.ui_draft = copy.deepcopy(defaults)
+            st.rerun()
+        st.markdown('<div class="rg-settings-note">Use Apply to activate theme or language changes.</div>', unsafe_allow_html=True)
 
 token_pack = get_theme_tokens(
     st.session_state.ui_settings["theme_mode"],
@@ -1293,10 +1402,13 @@ with header_left:
             f"""
             <div class="rg-shell">
                 <div class="rg-hero">
-                    <div class="rg-badge">{t("precision_banner")}</div>
-                    <div class="rg-title">RiceGenixAI</div>
-                    <div class="rg-subtitle">
-                        {t("hero_subtitle")}
+                    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+                        {'<img src="' + logo_data_uri + '" alt="RiceGenixAI logo" style="width:86px;height:86px;border-radius:22px;box-shadow:0 16px 44px rgba(0,0,0,0.18);">' if logo_data_uri else ''}
+                        <div>
+                            <div class="rg-badge">{t("precision_banner")}</div>
+                            <div class="rg-title">RiceGenixAI</div>
+                            <div class="rg-subtitle">{t("hero_subtitle")}</div>
+                        </div>
                     </div>
                     <div style="display:flex; gap:0.7rem; flex-wrap:wrap; margin-top:0.6rem;">
                         <div class="rg-badge">{weather_label}</div>
@@ -1322,32 +1434,11 @@ if not SKLEARN_AVAILABLE or yield_model is None:
 main_col, side_col = st.columns([1.4, 0.8], gap="large")
 
 with side_col:
-    st.markdown(
-        textwrap.dedent(
-            """
-            <div class="rg-card">
-                <div class="rg-card-inner">
-                    <div class="rg-section-title">Interface Overview</div>
-                    <div class="rg-section-copy">Everything below follows your in-app settings instantly, including light mode, dark mode, accent colors, rounded cards, motion, and typography.</div>
-                </div>
-            </div>
-            """
-        ),
-        unsafe_allow_html=True,
-    )
-    overview_items = [
-        {"label": "Theme", "value": st.session_state.ui_settings["theme_mode"]},
-        {"label": "Accent", "value": st.session_state.ui_settings["accent_palette"]},
-        {"label": "Motion", "value": st.session_state.ui_settings["motion"]},
-        {"label": "Density", "value": st.session_state.ui_settings["layout_density"]},
-    ]
-    render_metric_cards(overview_items)
-    st.markdown('<div class="rg-divider"></div>', unsafe_allow_html=True)
     if weather_data:
         weather_items = [
-            {"label": "Temperature", "value": f"{weather_data['temperature']}°C"},
-            {"label": "Wind", "value": f"{weather_data['windspeed']} km/h" if weather_data.get("windspeed") is not None else "N/A"},
-            {"label": "Mode", "value": st.session_state.ui_settings["theme_mode"]},
+            {"label": t("temperature_label"), "value": f"{weather_data['temperature']} C"},
+            {"label": t("wind_label"), "value": f"{weather_data['windspeed']} km/h" if weather_data.get("windspeed") is not None else "N/A"},
+            {"label": t("mode_label"), "value": st.session_state.ui_settings["theme_mode"]},
         ]
         render_metric_cards(weather_items)
     st.markdown(
@@ -1364,9 +1455,14 @@ with side_col:
         unsafe_allow_html=True,
     )
     if st.button(t("reset_inputs"), use_container_width=True):
-        preserved = st.session_state.ui_settings
+        preserved = copy.deepcopy(st.session_state.ui_settings)
+        preserved_draft = copy.deepcopy(st.session_state.ui_draft)
+        preserved_screen = st.session_state.screen
         st.session_state.clear()
         st.session_state.ui_settings = preserved
+        st.session_state.ui_draft = preserved_draft
+        st.session_state.screen = preserved_screen
+        st.session_state.result = None
         st.rerun()
 
 with main_col:
@@ -1390,42 +1486,16 @@ with main_col:
             crop_name = st.selectbox(t("select_rice_variety"), list(rice_data.keys()))
             height = st.number_input(t("enter_plant_height"), min_value=0.0, value=0.0)
             months_observed = st.number_input(t("months_observed"), min_value=0.5, max_value=12.0, value=1.0, step=0.5)
-            gene_b = st.radio(
-                t("disease_resistant"),
-                ["Yes", "No"],
-                horizontal=True,
-                format_func=lambda value: t(value.lower()),
-            )
-            gene_c = st.radio(
-                t("drought_tolerant"),
-                ["Yes", "No"],
-                horizontal=True,
-                format_func=lambda value: t(value.lower()),
-            )
+            gene_b = st.radio(t("disease_resistant"), ["Yes", "No"], horizontal=True, format_func=lambda value: t(value.lower()))
+            gene_c = st.radio(t("drought_tolerant"), ["Yes", "No"], horizontal=True, format_func=lambda value: t(value.lower()))
 
         with upper_b:
             rain = st.number_input(t("annual_rainfall"), min_value=0.0, value=0.0)
-            temp_unit = st.selectbox(
-                t("temperature_unit"),
-                ["Celsius", "Fahrenheit"],
-                format_func=lambda value: t(value.lower()),
-            )
+            temp_unit = st.selectbox(t("temperature_unit"), ["Celsius", "Fahrenheit"], format_func=lambda value: t(value.lower()))
             temp_input = st.number_input(t("average_temperature"), value=0.0)
-            soil_type = st.selectbox(
-                t("soil_type"),
-                ["Loamy", "Clay", "Sandy", "Alluvial", "Laterite"],
-                format_func=lambda value: t(value.lower()),
-            )
-            water_source = st.selectbox(
-                t("irrigation_water_type"),
-                ["Rainwater", "Groundwater", "Mixed"],
-                format_func=lambda value: t(value.lower()),
-            )
-            fertilizer_use = st.selectbox(
-                t("fertilizer_usage"),
-                ["Organic", "Chemical", "Mixed"],
-                format_func=lambda value: t(value.lower()),
-            )
+            soil_type = st.selectbox(t("soil_type"), ["Loamy", "Clay", "Sandy", "Alluvial", "Laterite"], format_func=lambda value: t(value.lower()))
+            water_source = st.selectbox(t("irrigation_water_type"), ["Rainwater", "Groundwater", "Mixed"], format_func=lambda value: t(value.lower()))
+            fertilizer_use = st.selectbox(t("fertilizer_usage"), ["Organic", "Chemical", "Mixed"], format_func=lambda value: t(value.lower()))
 
         st.markdown('<div class="rg-divider"></div>', unsafe_allow_html=True)
         soil_a, soil_b = st.columns(2, gap="large")
@@ -1439,9 +1509,6 @@ with main_col:
         submitted = st.form_submit_button(t("predict_yield"), use_container_width=True)
 
 preview_image, selected_image_source = resolve_image_input(uploaded_file, camera_file)
-if preview_image is not None:
-    st.image(preview_image, caption="Uploaded Image", use_container_width=True)
-
 current_signature = build_input_signature(
     crop_name, height, months_observed, gene_b, gene_c, rain, temp_unit, temp_input,
     soil_type, water_source, fertilizer_use, manual_ph, ph_input, preview_image is not None
@@ -1450,7 +1517,6 @@ current_signature = build_input_signature(
 if submitted:
     try:
         st.session_state.result = None
-
         rain_val = float(rain)
         temp_val = float(temp_input)
         height_val = float(height)
@@ -1474,6 +1540,9 @@ if submitted:
                 image_for_report = image_for_prediction.copy()
             except Exception:
                 disease_name = "Model Error"
+
+        if temp_unit == "Fahrenheit":
+            temp_val = (temp_val - 32) * 5 / 9
 
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
         base_pred = yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0]
@@ -1506,16 +1575,12 @@ if submitted:
 
         if disease:
             final_pred -= 0.8
-
         if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available"}:
             final_pred -= 1.2
-
         if rice_data[crop_name]["disease"] == 1 and g2 == 0:
             final_pred -= 0.5
-
         if water:
             final_pred -= 0.6
-
         if ph < 5.5:
             final_pred -= 0.5
         elif ph > 7.5:
@@ -1591,14 +1656,7 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         st.write(f"Predicted Final Height: {res['projected_final_height']:.2f} inches")
         st.write(res["height_flag"])
         st.markdown("### Gene Representation")
-        st.json(
-            {
-                "Gene_A": res["genes"][0],
-                "Gene_B": res["genes"][1],
-                "Gene_C": res["genes"][2],
-                "Gene_D": res["genes"][3],
-            }
-        )
+        st.json({"Gene_A": res["genes"][0], "Gene_B": res["genes"][1], "Gene_C": res["genes"][2], "Gene_D": res["genes"][3]})
 
     with summary_b:
         st.markdown("### Crop Health Analysis")
@@ -1641,6 +1699,10 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         st.write(t("monitor_weekly"))
         st.write(t("use_proper_spacing"))
 
+    if preview_image is not None:
+        st.markdown("### Uploaded Image")
+        st.image(preview_image, caption="Uploaded Image", use_container_width=True)
+
     st.markdown("### Data Analysis")
     fig1, fig2 = generate_graphs(res)
     graph_a, graph_b = st.columns(2, gap="large")
@@ -1648,7 +1710,6 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         st.pyplot(fig1, use_container_width=True)
     with graph_b:
         st.pyplot(fig2, use_container_width=True)
-    logo_path = "assets/logo.png"
     pdf_bytes = build_pdf_report(res, fig1, fig2, logo_path)
     pdf_b64 = base64.b64encode(pdf_bytes).decode()
     st.download_button(
