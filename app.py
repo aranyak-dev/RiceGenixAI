@@ -987,7 +987,7 @@ def inject_custom_theme(settings, token_pack):
         }}
         """
 
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <style>
@@ -1226,8 +1226,7 @@ def inject_custom_theme(settings, token_pack):
             }}
             </style>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
 
 
@@ -1275,7 +1274,7 @@ intro_tone = build_tone_data_uri(660, 180)
 home_tone = build_tone_data_uri(520, 220)
 
 if st.session_state.screen == "splash":
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <style>
@@ -1316,8 +1315,7 @@ if st.session_state.screen == "splash":
                 <div class="intro-loading">LOADING</div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
     progress_bar = st.progress(0, text="Loading...")
     for step in range(100):
@@ -1328,7 +1326,7 @@ if st.session_state.screen == "splash":
     st.stop()
 
 if st.session_state.screen == "home":
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <style>
@@ -1351,8 +1349,7 @@ if st.session_state.screen == "home":
                 </div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
     _, center_col, _ = st.columns([1.2, 1.6, 1.2])
     with center_col:
@@ -1415,7 +1412,7 @@ with header_left:
     weather_label = t("badge_weather_offline")
     if weather_data and weather_data.get("temperature") is not None:
         weather_label = t("live_weather", temperature=weather_data["temperature"])
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <div class="rg-shell">
@@ -1436,8 +1433,7 @@ with header_left:
                 </div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
 
 st.markdown(f'<div class="rg-floating-credit">{t("floating_credit")}</div>', unsafe_allow_html=True)
@@ -1459,7 +1455,7 @@ with side_col:
             {"label": t("mode_label"), "value": st.session_state.ui_settings["theme_mode"]},
         ]
         render_metric_cards(weather_items)
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <div class="rg-card" style="margin-top:1rem;">
@@ -1469,8 +1465,7 @@ with side_col:
                 </div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
     if st.button(t("reset_inputs"), use_container_width=True):
         preserved = copy.deepcopy(st.session_state.ui_settings)
@@ -1484,7 +1479,7 @@ with side_col:
         st.rerun()
 
 with main_col:
-    st.markdown(
+    st.html(
         textwrap.dedent(
             f"""
             <div class="rg-card">
@@ -1494,8 +1489,7 @@ with main_col:
                 </div>
             </div>
             """
-        ),
-        unsafe_allow_html=True,
+        )
     )
 
     # This deliberately uses a container rather than st.form: widgets inside a
