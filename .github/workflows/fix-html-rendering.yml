@@ -1,0 +1,56 @@
+name: Fix RiceGenixAI HTML rendering
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-html:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch HTML rendering
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("app.py")
+          text = path.read_text(encoding="utf-8")
+
+          pattern = re.compile(
+              r'st\\.markdown\\(\\n'
+              r'        textwrap\\.dedent\\((.*?)\\n'
+              r'        \\),\\n'
+              r'        unsafe_allow_html=True,\\n'
+              r'    \\)',
+              re.S,
+          )
+
+          replacement = r'st.html(\\n        textwrap.dedent(\\1\\n        )\\n    )'
+          patched, count = pattern.subn(replacement, text)
+
+          if count == 0:
+              print("No multiline HTML markdown blocks found; nothing to change.")
+              raise SystemExit(0)
+
+          path.write_text(patched, encoding="utf-8")
+          print(f"Converted {count} multiline custom HTML blocks from st.markdown to st.html.")
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py
+          git commit -m "Fix custom HTML rendering in Streamlit UI"
+          git push
