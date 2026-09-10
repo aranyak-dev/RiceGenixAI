@@ -1,0 +1,12 @@
+streamlit
+pandas
+numpy
+scikit-learn
+matplotlib
+requests
+reportlab
+pillow
+datasets>=3.0,<5.0
+
+torch==2.4.1
+torchvision==0.19.1

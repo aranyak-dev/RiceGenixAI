@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+dataset/
+build/
+desktop_build/
+android_app/.gradle/
+gradle-8.7/
+*.zip
+*.log
+model/*.before_fast
