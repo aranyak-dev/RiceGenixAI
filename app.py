@@ -1671,10 +1671,11 @@ if submitted:
         else:
             expected_height = rice_data[calculation_crop_name]["height"]
 
-        if online_profile and online_profile.get("maturity_months"):
+        if online_profile and (online_profile.get("height") or online_profile.get("maturity_months")):
             custom_profile = dict(rice_data[calculation_crop_name])
             custom_profile["height"] = expected_height
-            custom_profile["maturity_months"] = online_profile["maturity_months"]
+            if online_profile.get("maturity_months"):
+                custom_profile["maturity_months"] = online_profile["maturity_months"]
             original_profile = rice_data.get(crop_name)
             rice_data[crop_name] = custom_profile
             growth_metrics = project_growth_metrics(crop_name, height_val, months_observed)
@@ -1812,6 +1813,11 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         """,
         unsafe_allow_html=True,
     )
+    if res.get("online_variety_found"):
+        st.info("Custom variety profile found online from ICAR and used to calibrate this prediction.")
+    elif res.get("crop_name") == "Others":
+        st.warning("No matching ICAR variety profile was found online, so the generic fallback model was used.")
+
     render_metric_cards(
         [
             {"label": "Predicted Yield", "value": f"{res['yield']:.2f} kg/acre"},
