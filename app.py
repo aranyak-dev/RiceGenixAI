@@ -1769,7 +1769,7 @@ with main_col:
             crop_selection = st.selectbox(t("select_rice_variety"), list(rice_data.keys()) + ["Others"])
             custom_crop_name = ""
             if crop_selection == "Others":
-                custom_crop_name = st.text_input("Enter crop/variety name")
+                custom_crop_name = st.text_input(t("custom_variety_name"))
                 crop_name = custom_crop_name.strip() or "Others"
             else:
                 crop_name = crop_selection
@@ -1861,9 +1861,12 @@ if submitted:
             temp_val = (temp_val - 32) * 5 / 9
 
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
-        base_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
+        raw_model_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
+        base_pred = evidence_calibrated_yield_t_ha(raw_model_pred, online_profile)
         disease, water = crop_health(g2, rain_val, temp_val)
         advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
+        alternative_crops = recommend_alternative_crops(soil_type, rain_val, temp_val, ph, water_source, water)
+        field_improvement_plan = build_field_improvement_plan(soil_type, rain_val, temp_val, ph, fertilizer_use, water_source, water, disease_name)
         final_pred = max(0.0, base_pred)
 
         height_status = growth_metrics.get("height_status", "Growth status unavailable.")
@@ -1929,6 +1932,7 @@ if submitted:
 
         st.session_state.result = {
             "yield": final_pred,
+            "raw_model_yield_kg_acre": max(0.0, raw_model_pred * YIELD_THA_TO_KG_ACRE),
             "genes": [g1, g2, g3, g4],
             "rain": rain_val,
             "temp": temp_val,
@@ -1951,6 +1955,8 @@ if submitted:
             "online_variety_source": online_profile.get("source") if online_profile else None,
             "online_variety_found": bool(online_profile),
             "advisory_research": advisory_research,
+            "alternative_crops": alternative_crops,
+            "field_improvement_plan": field_improvement_plan,
         }
     except Exception as exc:
         st.error(f"Prediction error: {exc}")
@@ -2036,12 +2042,28 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         elif res["temp"] < 20:
             st.write(t("low_temperature_slow"))
 
-        st.markdown("### Research-based Field Recommendations")
+        st.markdown("### Potential Alternative Crops for This Field")
+        st.caption("These are suitability candidates, not guaranteed higher-yield choices. Confirm with local KVK/official recommendations before changing the crop.")
+        for item in res.get("alternative_crops", []):
+            st.write("• **" + item["crop"] + "** — " + item["reason"])
+        if not res.get("alternative_crops"):
+            st.write("• No strong alternative-crop candidate was identified from the current inputs.")
+
+        st.markdown("### Field Improvement & Yield Opportunities")
+        for item in res.get("field_improvement_plan", []):
+            st.write("• " + item)
+
+        st.markdown("### Internet Research Sources")
         research = res.get("advisory_research", {})
         for item in research.get("advice", []):
             st.write("• " + item)
+        for source in research.get("sources", RESEARCH_SOURCES):
+            st.markdown("- [" + source["title"] + "](" + source["url"] + ")")
+            st.caption(source["note"])
         if research.get("research_leads"):
-            st.caption("Online research leads checked: " + " | ".join(research["research_leads"]))
+            st.caption("Additional online research leads checked: " + " | ".join(research["research_leads"]))
+        st.caption("Synthetic-model reference before evidence calibration: " + f"{res.get('raw_model_yield_kg_acre', 0.0):.2f}" + " kg/acre")
+        st.info("Yield estimate combines the field model with a modest ICAR/West Bengal evidence prior. Reliable local calibration requires real harvested-field records.")
 
     if preview_image is not None:
         st.markdown("### Uploaded Image")
