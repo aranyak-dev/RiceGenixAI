@@ -2063,18 +2063,18 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         elif res["temp"] < 20:
             st.write(t("low_temperature_slow"))
 
-        st.markdown("### Potential Alternative Crops for This Field")
-        st.caption("These are suitability candidates, not guaranteed higher-yield choices. Confirm with local KVK/official recommendations before changing the crop.")
+        st.markdown("### " + t("alternative_crops_title"))
+        st.caption(t("alternative_crops_note"))
         for item in res.get("alternative_crops", []):
             st.write("• **" + item["crop"] + "** — " + item["reason"])
         if not res.get("alternative_crops"):
             st.write("• No strong alternative-crop candidate was identified from the current inputs.")
 
-        st.markdown("### Field Improvement & Yield Opportunities")
+        st.markdown("### " + t("field_improvement_title"))
         for item in res.get("field_improvement_plan", []):
             st.write("• " + item)
 
-        st.markdown("### Internet Research Sources")
+        st.markdown("### " + t("online_sources_title"))
         research = res.get("advisory_research", {})
         for item in research.get("advice", []):
             st.write("• " + item)
@@ -2083,8 +2083,8 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
             st.caption(source["note"])
         if research.get("research_leads"):
             st.caption("Additional online research leads checked: " + " | ".join(research["research_leads"]))
-        st.caption("Synthetic-model reference before evidence calibration: " + f"{res.get('raw_model_yield_kg_acre', 0.0):.2f}" + " kg/acre")
-        st.info("Yield estimate combines the field model with a modest ICAR/West Bengal evidence prior. Reliable local calibration requires real harvested-field records.")
+        st.caption(t("raw_model_note", value=f"{res.get('raw_model_yield_kg_acre', 0.0):.2f}"))
+        st.info(t("yield_calibration_note"))
 
     if preview_image is not None:
         st.markdown("### Uploaded Image")
