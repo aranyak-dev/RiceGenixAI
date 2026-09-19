@@ -732,8 +732,76 @@ def research_agronomic_recommendations(crop_name, soil_type, rain, temp, ph, fer
         if any(k in text_blob for k in ["icar", "kvk", "agricultural university", "agriculture"]):
             source_notes.append(item["title"])
 
-    return {"advice": advice[:8], "research_leads": list(dict.fromkeys(source_notes))[:4]}
+    return {"advice": advice[:8], "research_leads": list(dict.fromkeys(source_notes))[:4], "sources": RESEARCH_SOURCES}
 
+
+
+RESEARCH_SOURCES = [
+    {"title": "ICAR West Bengal agricultural strategy", "url": "https://icar.gov.in/en/node/17296", "note": "West Bengal rice constraints include poor drainage, micronutrient deficiency and soil acidity; site-specific nutrient management is recommended."},
+    {"title": "ICAR-NBSS & LUP Jhargram crop diversification project", "url": "https://www.icar.gov.in/en/icar-nbss-lup-rc-kolkata-launched-crop-diversification-project-tribal-village-jhargram-west-bengal", "note": "Jhargram rice-fallow diversification gives preference to pulses and oilseeds."},
+    {"title": "ICAR-IIRR released rice varieties database", "url": "https://icar-iirr.org/index.php/en/component/content/article/39-iirr-databases/215-released-rice-varieties-database", "note": "Official searchable database of released rice varieties and traits."},
+    {"title": "ICAR-IIRR rice productivity database", "url": "https://icar-iirr.org/index.php/en/component/content/article/39-iirr-databases/214-rice-area-production-and-productivity-database?Itemid=258", "note": "District and state rice productivity data useful for research and calibration."},
+    {"title": "ICAR balanced fertilizer campaign in West Bengal", "url": "https://www.icar.gov.in/index.php/en/intensive-campaign-balanced-use-fertilizers-sustainable-soil-health-organised-sskvk-south-24", "note": "Recent West Bengal guidance emphasizes soil-test-based balanced fertilizer use."},
+]
+
+WEST_BENGAL_RICE_REFERENCE_THA = 2.6
+
+def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None):
+    """Blend the synthetic RF with an official agronomic prior."""
+    evidence_prior = WEST_BENGAL_RICE_REFERENCE_THA
+    if online_profile and online_profile.get("baseline_yield_kg_acre"):
+        evidence_prior = float(online_profile["baseline_yield_kg_acre"]) / YIELD_THA_TO_KG_ACRE
+    model_pred_t_ha = float(np.clip(model_pred_t_ha, 1.0, 7.0))
+    evidence_prior = float(np.clip(evidence_prior, 1.5, 6.5))
+    return float(np.clip(0.80 * model_pred_t_ha + 0.20 * evidence_prior, 1.5, 6.5))
+
+def recommend_alternative_crops(soil_type, rain, temp, ph, water_source, water_stress):
+    candidates = []
+    if soil_type == "Laterite" or (ph <= 5.8 and soil_type in {"Sandy", "Laterite"}):
+        candidates.append(("Groundnut", "ICAR documents groundnut-based crop intensification in the red/lateritic zone."))
+        candidates.append(("Sesame", "ICAR lists improved sesame among West Bengal oilseed diversification choices."))
+    if water_stress or rain < 1100 or water_source == "Rainwater":
+        candidates.append(("Green gram (moong)", "Short-duration pulse candidate for rice-fallow diversification where residual moisture permits."))
+        candidates.append(("Black gram (urad)", "Pulse candidate included in ICAR West Bengal diversification programmes."))
+    if 900 <= rain <= 1600 and not water_stress:
+        candidates.append(("Mustard", "Established West Bengal crop; early sowing after rice is important in rice-fallow systems."))
+    if soil_type in {"Loamy", "Alluvial"} and water_source in {"Groundwater", "Mixed"}:
+        candidates.append(("Vegetables", "ICAR diversification work in Jhargram includes vegetables where local water and market conditions permit."))
+    seen = set()
+    output = []
+    for name, reason in candidates:
+        if name not in seen:
+            seen.add(name)
+            output.append({"crop": name, "reason": reason})
+    return output[:5]
+
+def build_field_improvement_plan(soil_type, rain, temp, ph, fertilizer_use, water_source, water_stress, disease_name):
+    actions = []
+    if ph < 5.5:
+        actions.append("Soil: obtain a soil test/Soil Health Card and consider lime or dolomite only at the test-recommended dose.")
+    elif ph > 7.5:
+        actions.append("Soil: check EC and nutrient availability before adding amendments; avoid blind correction.")
+    else:
+        actions.append("Soil: maintain organic matter and use soil-test-based nutrient management.")
+    if rain > 400 or water_stress:
+        actions.append("Drainage: keep field channels, outlet points and bund-side drains open so excess water can leave the plot.")
+    if rain > 1200:
+        actions.append("Heavy-rain safeguard: inspect outlets before major rain and repair blocked or eroded drainage paths.")
+    if rain < 1000:
+        actions.append("Water: conserve soil moisture and schedule irrigation around critical crop stages rather than a fixed calendar.")
+    if fertilizer_use == "Chemical":
+        actions.append("Nutrition: use balanced N-P-K and micronutrients only according to soil-test/official crop recommendations; do not increase urea alone.")
+    elif fertilizer_use == "Organic":
+        actions.append("Nutrition: use well-decomposed FYM/compost and consider vermicompost or suitable biofertilizers as part of integrated nutrient management.")
+    else:
+        actions.append("Nutrition: combine organic inputs with only the inorganic nutrients indicated by soil testing.")
+    if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available", "Model Error"}:
+        actions.append("Crop protection: verify the image diagnosis locally and follow the disease-specific recommendation before any spray decision.")
+    else:
+        actions.append("Crop protection: scout leaves, stems and panicles weekly and record observations for future yield calibration.")
+    if temp >= 35:
+        actions.append("Heat: monitor water availability and avoid prolonged moisture stress during sensitive growth stages.")
+    return actions[:6]
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def lookup_online_rice_variety(variety_name):
