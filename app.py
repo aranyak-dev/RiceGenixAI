@@ -32,6 +32,9 @@ except Exception:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Yield conversion: 1 tonne/hectare = 404.685642 kg/acre.
+YIELD_THA_TO_KG_ACRE = 1000 / 2.4710538147
+
 
 def rgba_to_hex(color_str):
     """Convert rgba() CSS string to hex format for matplotlib compatibility."""
@@ -296,6 +299,7 @@ translations = {
         "language_english": "English",
         "language_bengali": "বাংলা",
         "language_hindi": "हिन्दी",
+        "others": "Others",
     },
     "Bengali": {
         "settings_title": "⚙ সেটিংস",
@@ -711,11 +715,11 @@ def generate_graphs(result):
     ax1.axvspan(1500, 5000, alpha=0.2)
 
     rain_range = np.linspace(0, 5000, 100)
-    ideal_yield = -((rain_range - 1200) ** 2) / 800000 + 6
+    ideal_yield = (-((rain_range - 1200) ** 2) / 800000 + 6) * YIELD_THA_TO_KG_ACRE
     ax1.plot(rain_range, ideal_yield, color=theme_tokens["accent"], linewidth=3)
     ax1.scatter(result["rain"], result["yield"], s=110, color=theme_tokens["accent_soft"], edgecolors="white", linewidths=1.4)
     ax1.set_xlabel("Rainfall (mm)")
-    ax1.set_ylabel("Yield (tons/hectare)")
+    ax1.set_ylabel("Yield (kg/acre)")
     ax1.set_title("Rainfall Impact on Yield")
     ax1.tick_params(colors=theme_tokens["muted"])
     ax1.xaxis.label.set_color(theme_tokens["text"])
@@ -728,11 +732,11 @@ def generate_graphs(result):
     fig2.patch.set_facecolor(theme_tokens["surface"])
     ax2.set_facecolor(theme_tokens["bg"])
     temp_range = np.linspace(0, 60, 100)
-    ideal_yield_temp = -((temp_range - 30) ** 2) / 200 + 6
+    ideal_yield_temp = (-((temp_range - 30) ** 2) / 200 + 6) * YIELD_THA_TO_KG_ACRE
     ax2.plot(temp_range, ideal_yield_temp, color=theme_tokens["accent"], linewidth=3)
     ax2.scatter(result["temp"], result["yield"], s=110, color=theme_tokens["accent_soft"], edgecolors="white", linewidths=1.4)
     ax2.set_xlabel("Temperature (C)")
-    ax2.set_ylabel("Yield (tons/hectare)")
+    ax2.set_ylabel("Yield (kg/acre)")
     ax2.set_title("Temperature Impact on Yield")
     ax2.tick_params(colors=theme_tokens["muted"])
     ax2.xaxis.label.set_color(theme_tokens["text"])
@@ -761,7 +765,7 @@ def build_pdf_report(result, fig1, fig2, logo_path):
 
     content.append(Spacer(1, 12))
     content.append(Paragraph(f"<b>Crop Name:</b> {result['crop_name']}", styles["Normal"]))
-    content.append(Paragraph(f"<b>Predicted Yield:</b> {result['yield']:.2f} tons/hectare", styles["Normal"]))
+    content.append(Paragraph(f"<b>Predicted Yield:</b> {result['yield']:.2f} kg/acre", styles["Normal"]))
     content.append(Paragraph(f"<b>Rainfall:</b> {result['rain']} mm", styles["Normal"]))
     content.append(Paragraph(f"<b>Temperature:</b> {result['temp']:.2f} C", styles["Normal"]))
     content.append(Paragraph(f"<b>Soil pH:</b> {result['ph']:.2f}", styles["Normal"]))
@@ -1498,7 +1502,13 @@ with main_col:
     with st.container():
         upper_a, upper_b = st.columns(2, gap="large")
         with upper_a:
-            crop_name = st.selectbox(t("select_rice_variety"), list(rice_data.keys()))
+            crop_selection = st.selectbox(t("select_rice_variety"), list(rice_data.keys()) + ["Others"])
+            custom_crop_name = ""
+            if crop_selection == "Others":
+                custom_crop_name = st.text_input("Enter crop/variety name")
+                crop_name = custom_crop_name.strip() or "Others"
+            else:
+                crop_name = crop_selection
             height = st.number_input(t("enter_plant_height"), min_value=0.0, value=0.0)
             months_observed = st.number_input(t("months_observed"), min_value=0.5, max_value=12.0, value=1.0, step=0.5)
             gene_b = st.radio(t("disease_resistant"), ["Yes", "No"], horizontal=True, format_func=lambda value: t(value.lower()))
@@ -1540,8 +1550,9 @@ if submitted:
         temp_val = float(temp_input)
         height_val = float(height)
 
-        expected_height = rice_data[crop_name]["height"]
-        growth_metrics = project_growth_metrics(crop_name, height_val, months_observed)
+        calculation_crop_name = crop_name if crop_name in rice_data else "Swarna"
+        expected_height = rice_data[calculation_crop_name]["height"]
+        growth_metrics = project_growth_metrics(calculation_crop_name, height_val, months_observed)
         projected_final_height = growth_metrics["projected_final_height"]
         expected_height_now = growth_metrics["expected_height_now"]
         maturity_months = growth_metrics["maturity_months"]
@@ -1596,7 +1607,7 @@ if submitted:
             final_pred -= 0.8
         if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available"}:
             final_pred -= 1.2
-        if rice_data[crop_name]["disease"] == 1 and g2 == 0:
+        if rice_data[calculation_crop_name]["disease"] == 1 and g2 == 0:
             final_pred -= 0.5
         if water:
             final_pred -= 0.6
@@ -1611,6 +1622,9 @@ if submitted:
             image_for_report.save(temp_buffer.name)
             temp_buffer.close()
             uploaded_image_path = temp_buffer.name
+
+        # Convert the final model result from tonnes/hectare to kg/acre only at the output boundary.
+        final_pred = max(0.0, float(final_pred) * YIELD_THA_TO_KG_ACRE)
 
         st.session_state.result = {
             "yield": final_pred,
@@ -1655,7 +1669,7 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
     )
     render_metric_cards(
         [
-            {"label": "Predicted Yield", "value": f"{res['yield']:.2f} t/ha"},
+            {"label": "Predicted Yield", "value": f"{res['yield']:.2f} kg/acre"},
             {"label": "Detected Disease", "value": res["disease_name"]},
             {"label": "Projected Final Height", "value": f"{res['projected_final_height']:.2f} in"},
             {"label": "Growth Status", "value": res["height_flag"]},
