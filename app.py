@@ -662,22 +662,31 @@ def get_yield_model():
             "Gene_B": np.random.randint(0, 2, data_size),
             "Gene_C": np.random.randint(0, 2, data_size),
             "Gene_D": np.random.randint(0, 2, data_size),
-            "Rain": np.random.randint(50, 500, data_size),
-            "Temp": np.random.randint(20, 60, data_size),
-            "pH": np.random.uniform(4.5, 8.5, data_size),
+            # Train the synthetic model on realistic annual-rainfall and
+            # temperature ranges so the forest is not calibrated to a
+            # low-rainfall range while the app receives annual rainfall values.
+            "Rain": np.random.randint(600, 2001, data_size),
+            "Temp": np.random.uniform(20, 38, data_size),
+            "pH": np.random.uniform(5.0, 8.0, data_size),
         }
     )
 
+    # Yield is kept in tonnes/hectare internally and converted to kg/acre
+    # only at the output boundary. The previous coefficients could generate
+    # unrealistically high yields (near 3,000 kg/acre and above). This
+    # calibrated synthetic range keeps the estimator around realistic field
+    # yields while preserving the existing Random Forest workflow.
     data["Yield"] = (
-        2
-        + data["Gene_A"] * 0.9
-        + data["Gene_B"] * 0.8
-        + data["Gene_C"] * 0.7
-        + data["Gene_D"] * 0.6
-        + data["Rain"] * 0.012
-        - (data["Temp"] - 30) * 0.06
-        - abs(data["pH"] - 6.5) * 0.5
-        + np.random.normal(0, 0.3, data_size)
+        3.2
+        + data["Gene_A"] * 0.22
+        + data["Gene_B"] * 0.18
+        + data["Gene_C"] * 0.15
+        + data["Gene_D"] * 0.10
+        + np.minimum(data["Rain"], 1600) * 0.0007
+        - np.maximum(data["Temp"] - 32, 0) * 0.05
+        - np.maximum(22 - data["Temp"], 0) * 0.025
+        - abs(data["pH"] - 6.5) * 0.30
+        + np.random.normal(0, 0.15, data_size)
     )
 
     features = data[["Gene_A", "Gene_B", "Gene_C", "Gene_D", "Rain", "Temp", "pH"]]
