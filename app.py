@@ -1708,46 +1708,51 @@ if submitted:
             temp_val = (temp_val - 32) * 5 / 9
 
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
-        base_pred = yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0]
+        base_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
         disease, water = crop_health(g2, rain_val, temp_val)
-        final_pred = float(base_pred)
+        final_pred = max(0.0, base_pred)
 
         height_status = growth_metrics.get("height_status", "Growth status unavailable.")
         height_flag = height_status
 
+        # Apply field-condition effects multiplicatively. The previous version
+        # subtracted large fixed values in tonnes/hectare after the model,
+        # which could collapse many different fields to nearly the same low
+        # result. Multipliers preserve the model's variation and keep the
+        # prediction on a realistic scale.
         if height_val >= expected_height_now * 1.05:
-            final_pred *= 1.06
+            final_pred *= 1.05
         elif height_val >= expected_height_now * 0.95:
             final_pred *= 1.02
         elif height_val >= expected_height_now * 0.85:
-            final_pred *= 0.96
+            final_pred *= 0.98
         elif height_val >= expected_height_now * 0.70:
-            final_pred *= 0.90
+            final_pred *= 0.92
         else:
-            final_pred *= 0.82
+            final_pred *= 0.85
 
         if projected_final_height < expected_height:
             deficit = (expected_height - projected_final_height) / expected_height
-            final_pred -= 0.9 * min(deficit, 1.0)
+            final_pred *= max(0.85, 1.0 - 0.20 * min(deficit, 1.0))
             height_flag += " Projected final height is below the crop's average target."
         elif projected_final_height > expected_height * 1.08:
-            final_pred -= 0.3
+            final_pred *= 0.97
             height_flag += " Projected height is above the usual target, which may signal nutrient imbalance."
         else:
             height_flag += " Projection is within the flexible growth band."
 
         if disease:
-            final_pred -= 0.8
+            final_pred *= 0.90
         if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available"}:
-            final_pred -= 1.2
+            final_pred *= 0.82
         if rice_data[calculation_crop_name]["disease"] == 1 and g2 == 0:
-            final_pred -= 0.5
+            final_pred *= 0.95
         if water:
-            final_pred -= 0.6
+            final_pred *= 0.92
         if ph < 5.5:
-            final_pred -= 0.5
+            final_pred *= 0.92
         elif ph > 7.5:
-            final_pred -= 0.4
+            final_pred *= 0.94
 
         uploaded_image_path = None
         if image_for_report is not None:
@@ -1759,16 +1764,14 @@ if submitted:
         # Convert the final model result from tonnes/hectare to kg/acre only at the output boundary.
         final_pred = max(0.0, float(final_pred) * YIELD_THA_TO_KG_ACRE)
 
-        # When "Others" is used and ICAR has a published yield figure for the
-        # entered variety, anchor the generic model to that variety-specific
-        # baseline. This prevents a generic Swarna fallback from producing an
-        # unrealistic yield for a different variety.
+        # For a custom variety, use its published ICAR yield as a variety
+        # baseline, while retaining the model's field-condition response.
         if online_profile and online_profile.get("baseline_yield_kg_acre"):
             icAR_baseline = float(online_profile["baseline_yield_kg_acre"])
-            reference_model = float(yield_model.predict([[1, 1, 1, 0, 1200, 30, 6.5]])[0]) * YIELD_THA_TO_KG_ACRE
+            reference_model = float(yield_model.predict([[1, 1, 1, 0, 1200, 30, 6.5]])[0])
             condition_factor = final_pred / reference_model if reference_model > 0 else 1.0
-            condition_factor = float(np.clip(condition_factor, 0.70, 1.20))
-            final_pred = icAR_baseline * condition_factor
+            condition_factor = float(np.clip(condition_factor, 0.75, 1.15))
+            final_pred = (icAR_baseline / YIELD_THA_TO_KG_ACRE) * condition_factor
 
         st.session_state.result = {
             "yield": final_pred,
