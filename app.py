@@ -847,6 +847,7 @@ def lookup_online_rice_variety(variety_name):
         reader = PdfReader(io.BytesIO(response.content))
 
         query = re.sub(r"\\s+", " ", variety_name.strip()).lower()
+        query_variants = _variety_query_variants(variety_name)
         best_text = None
         best_score = 0
 
