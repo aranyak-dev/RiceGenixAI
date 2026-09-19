@@ -8,6 +8,9 @@ import math
 import struct
 import time
 import wave
+import re
+from difflib import SequenceMatcher
+from urllib.parse import quote_plus
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -652,6 +655,86 @@ def get_ai_model():
 @st.cache_resource
 
 
+def _name_normalize(value):
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def _name_skeleton(value):
+    return re.sub(r"[aeiou]", "", _name_normalize(value))
+
+
+def _variety_query_variants(value):
+    value = (value or "").strip()
+    variants = [value]
+    variants.append(re.sub(r"ali\b", "oli", value, flags=re.IGNORECASE))
+    variants.append(re.sub(r"oli\b", "ali", value, flags=re.IGNORECASE))
+    return list(dict.fromkeys(v for v in variants if v.strip()))
+
+
+def _online_search_snippets(query, max_results=5):
+    try:
+        url = "https://html.duckduckgo.com/html/?" + "q=" + quote_plus(query)
+        response = requests.get(url, timeout=12, headers={"User-Agent": "RiceGenixAI/1.0"})
+        response.raise_for_status()
+        blocks = re.findall(r'<a[^>]+class="result__a"[^>]*>(.*?)</a>(.*?)(?=<div class="result|</body>)', response.text, re.S)
+        results = []
+        for title_html, body_html in blocks[:max_results]:
+            title = re.sub(r"<.*?>", " ", title_html)
+            body = re.sub(r"<.*?>", " ", body_html)
+            title = re.sub(r"\s+", " ", title).strip()
+            body = re.sub(r"\s+", " ", body).strip()
+            if title:
+                results.append({"title": title, "snippet": body[:500]})
+        return results
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def research_agronomic_recommendations(crop_name, soil_type, rain, temp, ph, fertilizer_use, disease_name, water_stress):
+    queries = [
+        f"{crop_name} rice variety yield maturity ICAR",
+        f"{crop_name} rice fertilizer recommendation ICAR KVK",
+        f"rice {soil_type} soil fertilizer drainage recommendation ICAR West Bengal",
+    ]
+    web_results = []
+    for query in queries:
+        web_results.extend(_online_search_snippets(query, max_results=4))
+
+    advice = []
+    source_notes = []
+
+    if temp >= 30 and rain >= 1000:
+        advice.append("Consider locally recommended medium/short-duration rice varieties suited to warm, high-rainfall conditions; compare official yield and maturity before changing variety.")
+    if ph < 5.5:
+        advice.append("Prioritize a soil test and follow the Soil Health Card recommendation; acidic West Bengal soils may require liming based on the test rather than a fixed dose.")
+    if ph > 7.5:
+        advice.append("Check soil EC and nutrient availability; avoid adding amendments blindly and follow a soil-test recommendation.")
+    if rain > 400 or water_stress:
+        advice.append("Improve drainage with clean field channels, properly graded outlets and unobstructed bund-side drains so excess water can leave the plot quickly.")
+    if rain < 100:
+        advice.append("Maintain irrigation at critical stages and avoid long dry intervals; adjust irrigation to soil moisture rather than using a fixed schedule.")
+
+    if fertilizer_use == "Chemical":
+        advice.append("Use balanced, soil-test-based N-P-K rather than increasing urea alone. ICAR recommends balanced fertilization and avoiding indiscriminate urea/DAP use.")
+    elif fertilizer_use == "Organic":
+        advice.append("Use well-decomposed FYM/compost and consider vermicompost or suitable biofertilizers as part of integrated nutrient management, while checking nutrient supply with soil testing.")
+    else:
+        advice.append("Continue integrated nutrient management: combine well-decomposed organic manure with only the inorganic nutrients indicated by soil testing.")
+
+    if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available", "Model Error"}:
+        advice.append(f"Because the image result indicates {disease_name}, prioritize the crop-protection recommendation for that disease and verify the diagnosis locally before spraying.")
+    else:
+        advice.append("Continue weekly scouting of leaves, stems and panicles so disease or insect pressure is detected before it affects grain filling.")
+
+    for item in web_results:
+        text_blob = (item["title"] + " " + item["snippet"]).lower()
+        if any(k in text_blob for k in ["icar", "kvk", "agricultural university", "agriculture"]):
+            source_notes.append(item["title"])
+
+    return {"advice": advice[:8], "research_leads": list(dict.fromkeys(source_notes))[:4]}
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def lookup_online_rice_variety(variety_name):
     """Look up an unknown rice variety from official ICAR sources.
@@ -681,8 +764,10 @@ def lookup_online_rice_variety(variety_name):
         for page in reader.pages:
             text = page.extract_text() or ""
             normalized = re.sub(r"\\s+", " ", text).lower()
-            if query in normalized:
-                score = 100
+            matched_query = next((q for q in query_variants if q in normalized), None)
+            skeleton_match = _name_skeleton(variety_name) and _name_skeleton(variety_name) in _name_skeleton(normalized)
+            if matched_query or skeleton_match:
+                score = 100 if matched_query else 82
                 if "average grain yield" in normalized:
                     score += 10
                 if "maturity" in normalized:
@@ -1710,6 +1795,7 @@ if submitted:
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
         base_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
         disease, water = crop_health(g2, rain_val, temp_val)
+        advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
         final_pred = max(0.0, base_pred)
 
         height_status = growth_metrics.get("height_status", "Growth status unavailable.")
@@ -1796,6 +1882,7 @@ if submitted:
             "theme_tokens": token_pack["active"],
             "online_variety_source": online_profile.get("source") if online_profile else None,
             "online_variety_found": bool(online_profile),
+            "advisory_research": advisory_research,
         }
     except Exception as exc:
         st.error(f"Prediction error: {exc}")
@@ -1881,10 +1968,12 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         elif res["temp"] < 20:
             st.write(t("low_temperature_slow"))
 
-        st.write(t("use_high_yield_seeds"))
-        st.write(t("apply_balanced_npk"))
-        st.write(t("monitor_weekly"))
-        st.write(t("use_proper_spacing"))
+        st.markdown("### Research-based Field Recommendations")
+        research = res.get("advisory_research", {})
+        for item in research.get("advice", []):
+            st.write("• " + item)
+        if research.get("research_leads"):
+            st.caption("Online research leads checked: " + " | ".join(research["research_leads"]))
 
     if preview_image is not None:
         st.markdown("### Uploaded Image")
