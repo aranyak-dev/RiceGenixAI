@@ -796,6 +796,51 @@ def recommend_alternative_crops(soil_type, rain, temp, ph, water_source, water_s
             output.append({"crop": name, "reason": reason})
     return output[:5]
 
+def recommend_rice_varieties(soil_type, rain, temp, ph, water_source, water_stress):
+    """Match rice varieties to field ecology using official ICAR West Bengal guidance."""
+    profiles = [
+        {"name":"Rasi","traits":"upland / irrigated early","conditions":["upland"],"reason":"ICAR lists Rasi for West Bengal uplands and irrigated early conditions."},
+        {"name":"PNR 381","traits":"upland","conditions":["upland"],"reason":"ICAR specifically lists PNR 381 for West Bengal uplands."},
+        {"name":"CR Dhan 802","traits":"drought tolerant","conditions":["drought"],"reason":"ICAR lists CR Dhan 802 for drought-like conditions; the cultivar record reports drought performance."},
+        {"name":"Sahabhagi","traits":"drought tolerant","conditions":["drought"],"reason":"ICAR West Bengal advisory lists Sahabhagi for drought-like situations."},
+        {"name":"Swarna Sub-1","traits":"submergence tolerant / shallow lowland","conditions":["waterlogging"],"reason":"ICAR reports tolerance to complete submergence up to 15–17 days and suitability for shallow lowlands/flood-prone West Bengal."},
+        {"name":"CR Dhan 801","traits":"drought + submergence tolerant","conditions":["drought","waterlogging"],"reason":"ICAR reports both drought and submergence tolerance and recommends it for rainfed shallow lowland ecology including West Bengal."},
+        {"name":"Ranjit Sub-1","traits":"submergence tolerant / lowland","conditions":["waterlogging"],"reason":"ICAR West Bengal advisory lists Ranjit Sub-1 for lowland temporary water stagnation."},
+        {"name":"Sabita","traits":"deep-water rice","conditions":["deepwater"],"reason":"ICAR West Bengal advisory lists Sabita where permanent water stagnation occurs."},
+        {"name":"Manasarovar","traits":"shallow land","conditions":["shallow"],"reason":"ICAR lists Manasarovar for West Bengal shallow land."},
+        {"name":"Swarnadhan","traits":"shallow land","conditions":["shallow"],"reason":"ICAR lists Swarnadhan for West Bengal shallow land."},
+        {"name":"Shashi","traits":"shallow land","conditions":["shallow"],"reason":"ICAR lists Shashi for West Bengal shallow land."},
+        {"name":"DRR Dhan 64","traits":"early / nitrogen-use efficient / disease resistance","conditions":["irrigated"],"reason":"ICAR-IIRR reports 115–120 day maturity, N-use efficiency and multiple disease resistance; recommended for irrigated West Bengal."},
+        {"name":"DRR Dhan 42","traits":"drought tolerant","conditions":["drought"],"reason":"ICAR-IIRR identifies DRR Dhan 42 as a drought-tolerant rice variety."},
+    ]
+    lowland = water_stress and (rain >= 1000 or water_source in {"Rainwater","Mixed"})
+    drought = rain < 1000 or water_stress
+    deepwater = rain >= 1600 and water_stress
+    upland = soil_type in {"Laterite","Sandy"} and not water_stress
+    shallow = soil_type in {"Loamy","Alluvial"} and water_stress
+    irrigated = water_source in {"Groundwater","Mixed"} and not water_stress
+
+    scored = []
+    for p in profiles:
+        score = 0
+        reasons = []
+        if "drought" in p["conditions"] and drought:
+            score += 4; reasons.append("moisture/drought risk")
+        if "waterlogging" in p["conditions"] and lowland:
+            score += 5; reasons.append("temporary waterlogging/submergence risk")
+        if "deepwater" in p["conditions"] and deepwater:
+            score += 6; reasons.append("high water-stagnation risk")
+        if "upland" in p["conditions"] and upland:
+            score += 5; reasons.append("upland/lateritic field")
+        if "shallow" in p["conditions"] and shallow:
+            score += 4; reasons.append("shallow-lowland conditions")
+        if "irrigated" in p["conditions"] and irrigated:
+            score += 4; reasons.append("irrigated field")
+        if score:
+            scored.append({**p, "score": score, "match": "High" if score >= 5 else "Moderate", "field_reason": ", ".join(reasons)})
+    scored.sort(key=lambda x: (-x["score"], x["name"]))
+    return scored[:5]
+
 def build_field_improvement_plan(soil_type, rain, temp, ph, fertilizer_use, water_source, water_stress, disease_name):
     actions = []
     if ph < 5.5:
@@ -1978,6 +2023,7 @@ if submitted:
             "online_variety_found": bool(online_profile),
             "advisory_research": advisory_research,
             "alternative_crops": alternative_crops,
+            "rice_variety_recommendations": recommend_rice_varieties(soil_type, rain_val, temp_val, ph, water_source, water),
             "field_improvement_plan": field_improvement_plan,
         }
     except Exception as exc:
@@ -2064,12 +2110,15 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         elif res["temp"] < 20:
             st.write(t("low_temperature_slow"))
 
-        st.markdown("### " + t("alternative_crops_title"))
-        st.caption(t("alternative_crops_note"))
-        for item in res.get("alternative_crops", []):
-            st.write("• **" + item["crop"] + "** — " + item["reason"])
-        if not res.get("alternative_crops"):
-            st.write("• No strong alternative-crop candidate was identified from the current inputs.")
+        st.markdown("### Rice Variety Suitability")
+        st.caption("Potentially suitable rice varieties are matched to the field ecology using official ICAR evidence. This is a suitability analysis, not a guarantee of higher yield.")
+        rice_recs = res.get("rice_variety_recommendations", [])
+        if rice_recs:
+            for item in rice_recs:
+                st.write("• **" + item["name"] + "** — " + item["match"] + " match")
+                st.caption(item["traits"] + " | " + item["reason"] + " Field match: " + item["field_reason"])
+        else:
+            st.write("• No strong variety match was identified from the current inputs. Use the ICAR-IIRR variety database or local KVK for additional candidates.")
 
         st.markdown("### " + t("field_improvement_title"))
         for item in res.get("field_improvement_plan", []):
@@ -2086,7 +2135,6 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
             st.caption("Additional online research leads checked: " + " | ".join(research["research_leads"]))
         st.caption(t("raw_model_note", value=f"{res.get('raw_model_yield_kg_acre', 0.0):.2f}"))
         st.info(t("yield_calibration_note"))
-
     if preview_image is not None:
         st.markdown("### Uploaded Image")
         st.image(preview_image, caption="Uploaded Image", use_container_width=True)
