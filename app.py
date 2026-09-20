@@ -576,7 +576,7 @@ def t(key: str, **kwargs):
 
 def ricegenix_chatbot(question, context, language):
     """Answer farmer questions with optional OpenAI Responses API support."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("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")
     if not api_key:
         try:
             api_key = st.secrets.get("OPENAI_API_KEY")
