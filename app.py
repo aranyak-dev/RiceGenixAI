@@ -767,14 +767,52 @@ RESEARCH_SOURCES = [
 
 WEST_BENGAL_RICE_REFERENCE_THA = 2.6
 
-def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None):
-    """Blend the synthetic RF with an official agronomic prior."""
+def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None, soil_type=None,
+                                   rain=None, temp=None, ph=None, growth_ratio=None,
+                                   water_stress=False, disease_risk=False):
+    """Create a stable agronomic screening estimate without treating plant height as yield."""
     evidence_prior = WEST_BENGAL_RICE_REFERENCE_THA
     if online_profile and online_profile.get("baseline_yield_kg_acre"):
         evidence_prior = float(online_profile["baseline_yield_kg_acre"]) / YIELD_THA_TO_KG_ACRE
-    model_pred_t_ha = float(np.clip(model_pred_t_ha, 1.0, 7.0))
+
+    model_pred_t_ha = float(np.clip(model_pred_t_ha, 1.5, 7.0))
     evidence_prior = float(np.clip(evidence_prior, 1.5, 6.5))
-    return float(np.clip(0.80 * model_pred_t_ha + 0.20 * evidence_prior, 1.5, 6.5))
+
+    # The RF is synthetic, so do not let it dominate the result.  Use the
+    # official West Bengal productivity only as a conservative prior, then
+    # apply small, transparent field-condition corrections.
+    estimate = 0.65 * model_pred_t_ha + 0.35 * evidence_prior
+
+    if rain is not None:
+        if 1000 <= rain <= 1600:
+            estimate *= 1.04
+        elif rain < 700 or rain > 2200:
+            estimate *= 0.94
+
+    if temp is not None:
+        if 24 <= temp <= 32:
+            estimate *= 1.03
+        elif temp < 20 or temp > 36:
+            estimate *= 0.94
+
+    if ph is not None:
+        if 5.5 <= ph <= 7.2:
+            estimate *= 1.04
+        elif ph < 4.8 or ph > 8.0:
+            estimate *= 0.94
+
+    if growth_ratio is not None:
+        if growth_ratio >= 0.90:
+            estimate *= 1.04
+        elif growth_ratio < 0.65:
+            estimate *= 0.96
+
+    if water_stress:
+        estimate *= 0.94
+    if disease_risk:
+        estimate *= 0.94
+
+    return float(np.clip(estimate, 1.5, 6.5))
 
 def recommend_alternative_crops(soil_type, rain, temp, ph, water_source, water_stress):
     candidates = []
@@ -1929,7 +1967,17 @@ if submitted:
 
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
         raw_model_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
-        base_pred = evidence_calibrated_yield_t_ha(raw_model_pred, online_profile)
+        base_pred = evidence_calibrated_yield_t_ha(
+            raw_model_pred,
+            online_profile,
+            soil_type=soil_type,
+            rain=rain_val,
+            temp=temp_val,
+            ph=ph,
+            growth_ratio=growth_metrics.get("growth_ratio"),
+            water_stress=water,
+            disease_risk=disease,
+        )
         disease, water = crop_health(g2, rain_val, temp_val)
         advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
         alternative_crops = recommend_alternative_crops(soil_type, rain_val, temp_val, ph, water_source, water)
@@ -1939,29 +1987,13 @@ if submitted:
         height_status = growth_metrics.get("height_status", "Growth status unavailable.")
         height_flag = height_status
 
-        # Apply field-condition effects multiplicatively. The previous version
-        # subtracted large fixed values in tonnes/hectare after the model,
-        # which could collapse many different fields to nearly the same low
-        # result. Multipliers preserve the model's variation and keep the
-        # prediction on a realistic scale.
-        if height_val >= expected_height_now * 1.05:
-            final_pred *= 1.05
-        elif height_val >= expected_height_now * 0.95:
-            final_pred *= 1.02
-        elif height_val >= expected_height_now * 0.85:
-            final_pred *= 0.98
-        elif height_val >= expected_height_now * 0.70:
-            final_pred *= 0.92
-        else:
-            final_pred *= 0.85
-
+        # Plant height is used for growth monitoring, not as a direct yield penalty.
+        # This avoids the previous large downward bias when a young crop was
+        # shorter than its eventual target.
         if projected_final_height < expected_height:
-            deficit = (expected_height - projected_final_height) / expected_height
-            final_pred *= max(0.85, 1.0 - 0.20 * min(deficit, 1.0))
             height_flag += " Projected final height is below the crop's average target."
         elif projected_final_height > expected_height * 1.08:
-            final_pred *= 0.97
-            height_flag += " Projected height is above the usual target, which may signal nutrient imbalance."
+            height_flag += " Projection is above the usual target; verify nutrient balance."
         else:
             height_flag += " Projection is within the flexible growth band."
 
