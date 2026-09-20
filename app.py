@@ -1967,6 +1967,7 @@ if submitted:
 
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
         raw_model_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
+        disease, water = crop_health(g2, rain_val, temp_val)
         base_pred = evidence_calibrated_yield_t_ha(
             raw_model_pred,
             online_profile,
@@ -1978,7 +1979,6 @@ if submitted:
             water_stress=water,
             disease_risk=disease,
         )
-        disease, water = crop_health(g2, rain_val, temp_val)
         advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
         alternative_crops = recommend_alternative_crops(soil_type, rain_val, temp_val, ph, water_source, water)
         field_improvement_plan = build_field_improvement_plan(soil_type, rain_val, temp_val, ph, fertilizer_use, water_source, water, disease_name)
