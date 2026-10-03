@@ -309,7 +309,7 @@ translations = {
         "field_improvement_title": "Field Improvement & Yield Opportunities",
         "online_sources_title": "Internet Research Sources",
         "raw_model_note": "Synthetic-model reference before evidence calibration: {value} kg/acre",
-        "yield_calibration_note": "Yield estimate combines field inputs with an ICAR/West Bengal evidence prior; reliable local calibration requires real harvested-field records.",
+        "yield_calibration_note": "Hybrid yield estimate combines the synthetic model, an ICAR/West Bengal evidence prior, and similarity-weighted real harvested-field residuals. The real survey currently contains a small number of fields, so calibration influence is deliberately shrunk.",
     },
     "Bengali": {
         "settings_title": "⚙ সেটিংস",
@@ -772,56 +772,50 @@ WEST_BENGAL_RICE_REFERENCE_THA = 2.6
 def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None, soil_type=None,
                                    rain=None, temp=None, ph=None, growth_ratio=None,
                                    water_stress=False, disease_risk=False, variety_factor=1.0):
-    """Create a stable agronomic screening estimate without treating plant height as yield."""
+    """Combine the synthetic predictor with a regional agronomic prior.
+
+    This layer is intentionally smooth and conservative; detailed local
+    correction comes from hybrid_real_field_calibration_t_ha().
+    """
     evidence_prior = WEST_BENGAL_RICE_REFERENCE_THA
     if online_profile and online_profile.get("baseline_yield_kg_acre"):
         evidence_prior = float(online_profile["baseline_yield_kg_acre"]) / YIELD_THA_TO_KG_ACRE
 
-    model_pred_t_ha = float(np.clip(model_pred_t_ha, 1.5, 7.0))
-    evidence_prior = float(np.clip(evidence_prior, 1.5, 6.5))
+    model_pred_t_ha = float(np.clip(model_pred_t_ha, 1.2, 7.0))
+    evidence_prior = float(np.clip(evidence_prior, 1.2, 7.0))
 
-    # The RF is synthetic, so do not let it dominate the result.  Use the
-    # official West Bengal productivity only as a conservative prior, then
-    # apply small, transparent field-condition corrections.
     estimate = 0.78 * model_pred_t_ha + 0.22 * evidence_prior
     estimate *= float(np.clip(variety_factor, 0.90, 1.10))
 
+    # Smooth environmental responses avoid abrupt jumps at arbitrary thresholds.
     if rain is not None:
-        if 950 <= rain <= 1600:
-            estimate *= 1.03
-        elif 700 <= rain < 950 or 1600 < rain <= 1900:
-            estimate *= 0.98
-        elif rain < 700 or rain > 1900:
-            estimate *= 0.92
+        rain = float(rain)
+        rain_factor = 1.0 - 0.07 * (1.0 - math.exp(-((rain - 1300.0) / 650.0) ** 2))
+        estimate *= float(np.clip(rain_factor, 0.90, 1.01))
 
     if temp is not None:
-        if 24 <= temp <= 32:
-            estimate *= 1.03
-        elif 21 <= temp < 24 or 32 < temp <= 36:
-            estimate *= 0.98
-        elif temp < 21 or temp > 36:
-            estimate *= 0.92
+        temp = float(temp)
+        temp_factor = 1.0 - 0.07 * (1.0 - math.exp(-((temp - 28.0) / 6.5) ** 2))
+        estimate *= float(np.clip(temp_factor, 0.91, 1.01))
 
     if ph is not None:
-        if 5.8 <= ph <= 7.0:
-            estimate *= 1.04
-        elif 5.2 <= ph < 5.8 or 7.0 < ph <= 7.6:
-            estimate *= 0.98
-        elif ph < 5.2 or ph > 7.6:
-            estimate *= 0.93
+        ph = float(ph)
+        ph_factor = math.exp(-0.08 * (ph - 6.2) ** 2)
+        estimate *= float(np.clip(ph_factor, 0.90, 1.02))
 
     if growth_ratio is not None:
-        if growth_ratio >= 0.90:
-            estimate *= 1.04
-        elif growth_ratio < 0.65:
-            estimate *= 0.96
+        # Growth status is informative, but current height is not used as a
+        # direct multiplicative yield penalty. This avoids double-counting.
+        growth_ratio = float(growth_ratio)
+        growth_factor = 1.0 + 0.04 * float(np.clip(growth_ratio - 0.75, -0.75, 0.25))
+        estimate *= float(np.clip(growth_factor, 0.97, 1.01))
 
     if water_stress:
         estimate *= 0.94
     if disease_risk:
         estimate *= 0.94
 
-    return float(np.clip(estimate, 1.8, 5.8))
+    return float(np.clip(estimate, 0.8, 7.0))
 
 def recommend_alternative_crops(soil_type, rain, temp, ph, water_source, water_stress):
     candidates = []
@@ -1019,6 +1013,243 @@ def lookup_online_rice_variety(variety_name):
         return None
 
 
+
+# Real harvested-field observations supplied for RiceGenixAI calibration.
+# IMPORTANT: only Harvest_kg / Area_acre is used as the ground-truth target.
+# Any hand-entered "predicted yield" values are intentionally NOT stored here.
+REAL_FIELD_SURVEY_FALLBACK = [
+    {"Field_ID":"F001","Variety":"Super Shyamoli","Height_in":11.25,"Duration_months":2.63,"Disease_Resistant":0,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":26,"Water_Source":"Rainwater","Fertilizer":"Mixed","Harvest_kg":500.0,"Area_acre":0.3},
+    {"Field_ID":"F002","Variety":"Rangamati Bullet","Height_in":8.97,"Duration_months":2.60,"Disease_Resistant":0,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":27,"Water_Source":"Rainwater","Fertilizer":"Mixed","Harvest_kg":700.0,"Area_acre":0.7},
+    {"Field_ID":"F003","Variety":"Sarna","Height_in":15.74,"Duration_months":2.57,"Disease_Resistant":1,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":26,"Water_Source":"Rainwater","Fertilizer":"Mixed","Harvest_kg":800.0,"Area_acre":0.6},
+    {"Field_ID":"F004","Variety":"Bohurupi","Height_in":9.84,"Duration_months":2.67,"Disease_Resistant":0,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":26,"Water_Source":"Rainwater","Fertilizer":"Organic","Harvest_kg":600.0,"Area_acre":0.5},
+    {"Field_ID":"F005","Variety":"Nolat","Height_in":10.70,"Duration_months":2.82,"Disease_Resistant":1,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":26,"Water_Source":"Mixed","Fertilizer":"Mixed","Harvest_kg":700.0,"Area_acre":1.0},
+    {"Field_ID":"F006","Variety":"Malati Gold","Height_in":14.17,"Duration_months":2.32,"Disease_Resistant":1,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1500,"Temperature_C":27,"Water_Source":"Mixed","Fertilizer":"Mixed","Harvest_kg":700.0,"Area_acre":0.8},
+    {"Field_ID":"F007","Variety":"Kolingo","Height_in":7.67,"Duration_months":2.89,"Disease_Resistant":1,"Drought_Resistant":0,"Soil_pH":6.5,"Soil_Type":"Laterite","Rainfall_mm":1400,"Temperature_C":26,"Water_Source":"Mixed","Fertilizer":"Mixed","Harvest_kg":600.0,"Area_acre":0.5},
+]
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_real_field_survey():
+    """Load harvested-field observations from CSV, with an embedded fallback."""
+    path = os.path.join(BASE_DIR, "data", "field_survey.csv")
+    records = []
+    try:
+        if os.path.exists(path):
+            survey = pd.read_csv(path)
+            required = {
+                "Field_ID","Variety","Height_in","Duration_months","Disease_Resistant",
+                "Drought_Resistant","Soil_pH","Soil_Type","Rainfall_mm","Temperature_C",
+                "Water_Source","Fertilizer","Harvest_kg","Area_acre"
+            }
+            if required.issubset(set(survey.columns)):
+                records = survey.to_dict("records")
+    except Exception:
+        records = []
+
+    if not records:
+        records = copy.deepcopy(REAL_FIELD_SURVEY_FALLBACK)
+
+    survey = pd.DataFrame(records)
+    numeric_cols = [
+        "Height_in","Duration_months","Disease_Resistant","Drought_Resistant",
+        "Soil_pH","Rainfall_mm","Temperature_C","Harvest_kg","Area_acre"
+    ]
+    for col in numeric_cols:
+        survey[col] = pd.to_numeric(survey[col], errors="coerce")
+
+    survey = survey.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=["Harvest_kg","Area_acre","Rainfall_mm","Temperature_C","Soil_pH"]
+    )
+    survey = survey[survey["Area_acre"] > 0].copy()
+    survey["Actual_Yield_kg_acre"] = survey["Harvest_kg"] / survey["Area_acre"]
+    survey = survey[survey["Actual_Yield_kg_acre"] > 0].copy()
+
+    for col in ["Disease_Resistant","Drought_Resistant"]:
+        survey[col] = survey[col].fillna(0).astype(int).clip(0, 1)
+
+    return survey.reset_index(drop=True)
+
+
+def _robust_scale(series, floor):
+    values = pd.to_numeric(series, errors="coerce").dropna().to_numpy(dtype=float)
+    if values.size < 2:
+        return float(floor)
+    median = float(np.median(values))
+    mad = float(np.median(np.abs(values - median))) * 1.4826
+    if mad <= 1e-9:
+        mad = float(np.std(values))
+    return max(float(mad), float(floor))
+
+
+def _field_similarity(input_row, survey_row, scales):
+    """Similarity for real-field analog calibration; lower distance means closer ecology."""
+    numeric_terms = [
+        ((float(input_row["height"]) - float(survey_row["Height_in"])) / scales["height"]) ** 2,
+        ((float(input_row["duration"]) - float(survey_row["Duration_months"])) / scales["duration"]) ** 2,
+        ((float(input_row["ph"]) - float(survey_row["Soil_pH"])) / scales["ph"]) ** 2,
+        ((float(input_row["rain"]) - float(survey_row["Rainfall_mm"])) / scales["rain"]) ** 2,
+        ((float(input_row["temp"]) - float(survey_row["Temperature_C"])) / scales["temp"]) ** 2,
+    ]
+    numeric_distance = math.sqrt(sum(numeric_terms) / len(numeric_terms))
+
+    categorical_cols = [
+        ("disease_resistant", "Disease_Resistant"),
+        ("drought_resistant", "Drought_Resistant"),
+        ("soil_type", "Soil_Type"),
+        ("water_source", "Water_Source"),
+        ("fertilizer_use", "Fertilizer"),
+    ]
+    mismatches = 0
+    for left, right in categorical_cols:
+        if str(input_row[left]).strip().lower() != str(survey_row[right]).strip().lower():
+            mismatches += 1
+    categorical_distance = mismatches / len(categorical_cols)
+
+    distance = 0.72 * numeric_distance + 0.28 * categorical_distance
+    similarity = 1.0 / (1.0 + distance)
+
+    input_variety = _name_normalize(str(input_row.get("variety", "")))
+    survey_variety = _name_normalize(str(survey_row.get("Variety", "")))
+    exact_variety = bool(input_variety and survey_variety and input_variety == survey_variety)
+    if exact_variety:
+        similarity = min(1.0, similarity * 2.5)
+
+    return float(np.clip(similarity, 0.0, 1.0)), exact_variety
+
+
+def hybrid_real_field_calibration_t_ha(
+    base_prediction_t_ha,
+    variety,
+    height,
+    duration,
+    disease_resistant,
+    drought_resistant,
+    soil_type,
+    rain,
+    temp,
+    ph,
+    water_source,
+    fertilizer_use,
+):
+    """Blend the current agronomic/synthetic estimate with real harvested-field residuals.
+
+    The real data do not replace the broad model. Instead, they estimate how the
+    deployed baseline tends to differ from actual local harvests. Similar fields
+    receive more influence; the influence is shrunk by effective sample size so
+    seven observations cannot dominate the whole forecast.
+    """
+    survey = load_real_field_survey()
+    base_prediction_t_ha = float(base_prediction_t_ha)
+
+    if survey.empty:
+        return {
+            "prediction_t_ha": base_prediction_t_ha,
+            "blend_weight": 0.0,
+            "survey_count": 0,
+            "nearest_fields": [],
+            "real_residual_t_ha": 0.0,
+            "real_evidence_strength": 0.0,
+        }
+
+    input_row = {
+        "variety": variety,
+        "height": float(height),
+        "duration": float(duration),
+        "disease_resistant": int(bool(disease_resistant)),
+        "drought_resistant": int(bool(drought_resistant)),
+        "soil_type": soil_type,
+        "rain": float(rain),
+        "temp": float(temp),
+        "ph": float(ph),
+        "water_source": water_source,
+        "fertilizer_use": fertilizer_use,
+    }
+
+    scales = {
+        "height": _robust_scale(survey["Height_in"], 2.5),
+        "duration": _robust_scale(survey["Duration_months"], 0.15),
+        "ph": _robust_scale(survey["Soil_pH"], 0.20),
+        "rain": _robust_scale(survey["Rainfall_mm"], 100.0),
+        "temp": _robust_scale(survey["Temperature_C"], 1.0),
+    }
+
+    weights = []
+    residuals = []
+    labels = []
+    details = []
+
+    for _, row in survey.iterrows():
+        similarity, exact_variety = _field_similarity(input_row, row, scales)
+
+        # Recreate the currently deployed baseline without treating disease
+        # resistance as proof of current disease.
+        raw = yield_model.predict([[
+            1,
+            int(row["Disease_Resistant"]),
+            int(row["Drought_Resistant"]),
+            1,
+            float(row["Rainfall_mm"]),
+            float(row["Temperature_C"]),
+            float(row["Soil_pH"]),
+        ]])[0]
+
+        survey_base = evidence_calibrated_yield_t_ha(
+            raw,
+            None,
+            soil_type=str(row["Soil_Type"]),
+            rain=float(row["Rainfall_mm"]),
+            temp=float(row["Temperature_C"]),
+            ph=float(row["Soil_pH"]),
+            growth_ratio=1.0,
+            water_stress=False,
+            disease_risk=False,
+            variety_factor=1.0,
+        )
+        actual_t_ha = float(row["Actual_Yield_kg_acre"]) / YIELD_THA_TO_KG_ACRE
+        residual_t_ha = actual_t_ha - survey_base
+
+        weights.append(similarity)
+        residuals.append(residual_t_ha)
+        labels.append(str(row["Field_ID"]))
+        details.append((similarity, exact_variety, str(row["Field_ID"])))
+
+    weights = np.asarray(weights, dtype=float)
+    residuals = np.asarray(residuals, dtype=float)
+
+    if not np.isfinite(weights).any() or float(weights.sum()) <= 0:
+        return {
+            "prediction_t_ha": base_prediction_t_ha,
+            "blend_weight": 0.0,
+            "survey_count": int(len(survey)),
+            "nearest_fields": [],
+            "real_residual_t_ha": 0.0,
+            "real_evidence_strength": 0.0,
+        }
+
+    normalized = weights / weights.sum()
+    residual_mean = float(np.sum(normalized * residuals))
+    effective_n = float((weights.sum() ** 2) / max(np.sum(weights ** 2), 1e-9))
+
+    # Bayesian-style shrinkage: local real evidence grows with effective
+    # sample size but is capped while the survey remains small.
+    sample_weight = min(0.45, effective_n / (effective_n + 4.0))
+    coverage_weight = float(np.max(weights))
+    blend_weight = float(np.clip(sample_weight * coverage_weight, 0.0, 0.45))
+
+    hybrid_prediction = base_prediction_t_ha + blend_weight * residual_mean
+    hybrid_prediction = float(np.clip(hybrid_prediction, 0.8, 7.0))
+
+    nearest = sorted(details, reverse=True)[:3]
+    nearest_fields = [item[2] + (" (same variety)" if item[1] else "") for item in nearest]
+
+    return {
+        "prediction_t_ha": hybrid_prediction,
+        "blend_weight": blend_weight,
+        "survey_count": int(len(survey)),
+        "nearest_fields": nearest_fields,
+        "real_residual_t_ha": residual_mean,
+        "real_evidence_strength": blend_weight,
+    }
+
 def get_yield_model():
     if not SKLEARN_AVAILABLE:
         return None
@@ -1140,6 +1371,11 @@ def build_pdf_report(result, fig1, fig2, logo_path):
     content.append(Spacer(1, 12))
     content.append(Paragraph(f"<b>Crop Name:</b> {result['crop_name']}", styles["Normal"]))
     content.append(Paragraph(f"<b>Predicted Yield:</b> {result['yield']:.2f} kg/acre", styles["Normal"]))
+    content.append(Paragraph(
+        f"<b>Hybrid calibration:</b> {result.get('real_calibration_fields', 0)} real harvested fields; "
+        f"{result.get('real_calibration_weight', 0.0) * 100:.0f}% local-evidence blend.",
+        styles["Normal"],
+    ))
     content.append(Paragraph(f"<b>Rainfall:</b> {result['rain']} mm", styles["Normal"]))
     content.append(Paragraph(f"<b>Temperature:</b> {result['temp']:.2f} C", styles["Normal"]))
     content.append(Paragraph(f"<b>Soil pH:</b> {result['ph']:.2f}", styles["Normal"]))
@@ -1989,10 +2225,28 @@ if submitted:
             disease_risk=disease,
             variety_factor=variety_factor,
         )
+
+        # Hybrid calibration: keep the broad synthetic/agronomic signal, then
+        # shrink toward actual harvested fields that resemble this field.
+        hybrid_calibration = hybrid_real_field_calibration_t_ha(
+            base_pred,
+            variety=crop_name,
+            height=height_val,
+            duration=float(months_observed),
+            disease_resistant=(gene_b == "Yes"),
+            drought_resistant=(gene_c == "Yes"),
+            soil_type=soil_type,
+            rain=rain_val,
+            temp=temp_val,
+            ph=ph,
+            water_source=water_source,
+            fertilizer_use=fertilizer_use,
+        )
+        final_pred = hybrid_calibration["prediction_t_ha"]
+
         advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
         alternative_crops = recommend_alternative_crops(soil_type, rain_val, temp_val, ph, water_source, water)
         field_improvement_plan = build_field_improvement_plan(soil_type, rain_val, temp_val, ph, fertilizer_use, water_source, water, disease_name)
-        final_pred = max(0.0, base_pred)
 
         height_status = growth_metrics.get("height_status", "Growth status unavailable.")
         height_flag = height_status
@@ -2007,21 +2261,8 @@ if submitted:
         else:
             height_flag += " Projection is within the flexible growth band."
 
-        # Apply a disease penalty only when the leaf model actually detects
-        # a disease. Do not penalize the crop merely because its variety is
-        # not marked disease-resistant.
-        if disease:
-            final_pred *= 0.88
-        if water:
-            final_pred *= 0.94
-        # Soil pH outside the broad rice range is a moderate risk, not
-        # an automatic large yield loss.
-        if ph < 5.0:
-            final_pred *= 0.95
-        elif ph < 5.5:
-            final_pred *= 0.98
-        elif ph > 7.5:
-            final_pred *= 0.97
+        # Disease, water stress and pH effects are already applied once in
+        # evidence_calibrated_yield_t_ha(). Do not apply them a second time.
 
         uploaded_image_path = None
         if image_for_report is not None:
@@ -2045,6 +2286,11 @@ if submitted:
         st.session_state.result = {
             "yield": final_pred,
             "raw_model_yield_kg_acre": max(0.0, raw_model_pred * YIELD_THA_TO_KG_ACRE),
+            "hybrid_base_yield_kg_acre": float(base_pred * YIELD_THA_TO_KG_ACRE),
+            "real_calibration_weight": float(hybrid_calibration.get("blend_weight", 0.0)),
+            "real_calibration_fields": int(hybrid_calibration.get("survey_count", 0)),
+            "real_calibration_residual_kg_acre": float(hybrid_calibration.get("real_residual_t_ha", 0.0) * YIELD_THA_TO_KG_ACRE),
+            "real_nearest_fields": hybrid_calibration.get("nearest_fields", []),
             "genes": [g1, g2, g3, g4],
             "rain": rain_val,
             "temp": temp_val,
@@ -2179,6 +2425,12 @@ if st.session_state.result and st.session_state.result.get("signature") == curre
         if research.get("research_leads"):
             st.caption("Additional online research leads checked: " + " | ".join(research["research_leads"]))
         st.caption(t("raw_model_note", value=f"{res.get('raw_model_yield_kg_acre', 0.0):.2f}"))
+        st.caption(
+            "Hybrid calibration: "
+            f"{res.get('real_calibration_fields', 0)} real harvested fields, "
+            f"{res.get('real_calibration_weight', 0.0) * 100:.0f}% local-evidence blend. "
+            f"Nearest survey fields: {', '.join(res.get('real_nearest_fields', [])) or 'none'}."
+        )
         st.info(t("yield_calibration_note"))
     if preview_image is not None:
         st.markdown("### Uploaded Image")
