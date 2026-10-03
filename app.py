@@ -613,7 +613,9 @@ def estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_value):
 
 
 def crop_health(g2, rain, temp):
-    disease = 1 if g2 == 0 else 0
+    # Disease resistance is a varietal trait, not evidence that the current
+    # crop is diseased. Actual disease status comes from the leaf model.
+    disease = 0
     water = 1 if rain < 120 or temp > 42 else 0
     return disease, water
 
@@ -1968,6 +1970,7 @@ if submitted:
         ph = estimate_ph(soil_type, water_source, fertilizer_use, manual_ph, ph_input)
         raw_model_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
         disease, water = crop_health(g2, rain_val, temp_val)
+        disease = 1 if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available", "Model Error"} else 0
         base_pred = evidence_calibrated_yield_t_ha(
             raw_model_pred,
             online_profile,
@@ -1997,18 +2000,21 @@ if submitted:
         else:
             height_flag += " Projection is within the flexible growth band."
 
+        # Apply a disease penalty only when the leaf model actually detects
+        # a disease. Do not penalize the crop merely because its variety is
+        # not marked disease-resistant.
         if disease:
-            final_pred *= 0.90
-        if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available"}:
-            final_pred *= 0.82
-        if rice_data[calculation_crop_name]["disease"] == 1 and g2 == 0:
-            final_pred *= 0.95
+            final_pred *= 0.88
         if water:
-            final_pred *= 0.92
-        if ph < 5.5:
-            final_pred *= 0.92
-        elif ph > 7.5:
             final_pred *= 0.94
+        # Soil pH outside the broad rice range is a moderate risk, not
+        # an automatic large yield loss.
+        if ph < 5.0:
+            final_pred *= 0.95
+        elif ph < 5.5:
+            final_pred *= 0.98
+        elif ph > 7.5:
+            final_pred *= 0.97
 
         uploaded_image_path = None
         if image_for_report is not None:
