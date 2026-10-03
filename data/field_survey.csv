@@ -1,0 +1,8 @@
+Field_ID,Variety,Height_in,Duration_months,Disease_Resistant,Drought_Resistant,Soil_pH,Soil_Type,Rainfall_mm,Temperature_C,Water_Source,Fertilizer,Harvest_kg,Area_acre
+F001,Super Shyamoli,11.25,2.63,0,0,6.5,Laterite,1400,26,Rainwater,Mixed,500,0.3
+F002,Rangamati Bullet,8.97,2.60,0,0,6.5,Laterite,1400,27,Rainwater,Mixed,700,0.7
+F003,Sarna,15.74,2.57,1,0,6.5,Laterite,1400,26,Rainwater,Mixed,800,0.6
+F004,Bohurupi,9.84,2.67,0,0,6.5,Laterite,1400,26,Rainwater,Organic,600,0.5
+F005,Nolat,10.70,2.82,1,0,6.5,Laterite,1400,26,Mixed,Mixed,700,1.0
+F006,Malati Gold,14.17,2.32,1,0,6.5,Laterite,1500,27,Mixed,Mixed,700,0.8
+F007,Kolingo,7.67,2.89,1,0,6.5,Laterite,1400,26,Mixed,Mixed,600,0.5
