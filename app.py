@@ -771,7 +771,7 @@ WEST_BENGAL_RICE_REFERENCE_THA = 2.6
 
 def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None, soil_type=None,
                                    rain=None, temp=None, ph=None, growth_ratio=None,
-                                   water_stress=False, disease_risk=False):
+                                   water_stress=False, disease_risk=False, variety_factor=1.0):
     """Create a stable agronomic screening estimate without treating plant height as yield."""
     evidence_prior = WEST_BENGAL_RICE_REFERENCE_THA
     if online_profile and online_profile.get("baseline_yield_kg_acre"):
@@ -783,25 +783,32 @@ def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None, soil_ty
     # The RF is synthetic, so do not let it dominate the result.  Use the
     # official West Bengal productivity only as a conservative prior, then
     # apply small, transparent field-condition corrections.
-    estimate = 0.65 * model_pred_t_ha + 0.35 * evidence_prior
+    estimate = 0.78 * model_pred_t_ha + 0.22 * evidence_prior
+    estimate *= float(np.clip(variety_factor, 0.90, 1.10))
 
     if rain is not None:
-        if 1000 <= rain <= 1600:
-            estimate *= 1.04
-        elif rain < 700 or rain > 2200:
-            estimate *= 0.94
+        if 950 <= rain <= 1600:
+            estimate *= 1.03
+        elif 700 <= rain < 950 or 1600 < rain <= 1900:
+            estimate *= 0.98
+        elif rain < 700 or rain > 1900:
+            estimate *= 0.92
 
     if temp is not None:
         if 24 <= temp <= 32:
             estimate *= 1.03
-        elif temp < 20 or temp > 36:
-            estimate *= 0.94
+        elif 21 <= temp < 24 or 32 < temp <= 36:
+            estimate *= 0.98
+        elif temp < 21 or temp > 36:
+            estimate *= 0.92
 
     if ph is not None:
-        if 5.5 <= ph <= 7.2:
+        if 5.8 <= ph <= 7.0:
             estimate *= 1.04
-        elif ph < 4.8 or ph > 8.0:
-            estimate *= 0.94
+        elif 5.2 <= ph < 5.8 or 7.0 < ph <= 7.6:
+            estimate *= 0.98
+        elif ph < 5.2 or ph > 7.6:
+            estimate *= 0.93
 
     if growth_ratio is not None:
         if growth_ratio >= 0.90:
@@ -814,7 +821,7 @@ def evidence_calibrated_yield_t_ha(model_pred_t_ha, online_profile=None, soil_ty
     if disease_risk:
         estimate *= 0.94
 
-    return float(np.clip(estimate, 1.5, 6.5))
+    return float(np.clip(estimate, 1.8, 5.8))
 
 def recommend_alternative_crops(soil_type, rain, temp, ph, water_source, water_stress):
     candidates = []
@@ -1017,45 +1024,41 @@ def get_yield_model():
         return None
 
     np.random.seed(42)
-    data_size = 300
-    data = pd.DataFrame(
-        {
-            "Gene_A": np.random.randint(0, 2, data_size),
-            "Gene_B": np.random.randint(0, 2, data_size),
-            "Gene_C": np.random.randint(0, 2, data_size),
-            "Gene_D": np.random.randint(0, 2, data_size),
-            # Train the synthetic model on realistic annual-rainfall and
-            # temperature ranges so the forest is not calibrated to a
-            # low-rainfall range while the app receives annual rainfall values.
-            "Rain": np.random.randint(600, 2001, data_size),
-            "Temp": np.random.uniform(20, 38, data_size),
-            "pH": np.random.uniform(5.0, 8.0, data_size),
-        }
-    )
+    data_size = 5000
+    data = pd.DataFrame({
+        "Gene_A": np.random.randint(0, 2, data_size),
+        "Gene_B": np.random.randint(0, 2, data_size),
+        "Gene_C": np.random.randint(0, 2, data_size),
+        "Gene_D": np.random.randint(0, 2, data_size),
+        "Rain": np.random.uniform(500, 2200, data_size),
+        "Temp": np.random.uniform(20, 38, data_size),
+        "pH": np.random.uniform(4.8, 8.0, data_size),
+    })
 
-    # Yield is kept in tonnes/hectare internally and converted to kg/acre
-    # only at the output boundary. The previous coefficients could generate
-    # unrealistically high yields (near 3,000 kg/acre and above). This
-    # calibrated synthetic range keeps the estimator around realistic field
-    # yields while preserving the existing Random Forest workflow.
-    data["Yield"] = (
-        3.2
-        + data["Gene_A"] * 0.22
-        + data["Gene_B"] * 0.18
-        + data["Gene_C"] * 0.15
-        + data["Gene_D"] * 0.10
-        + np.minimum(data["Rain"], 1600) * 0.0007
-        - np.maximum(data["Temp"] - 32, 0) * 0.05
-        - np.maximum(22 - data["Temp"], 0) * 0.025
-        - abs(data["pH"] - 6.5) * 0.30
-        + np.random.normal(0, 0.15, data_size)
+    rain_effect = 0.00055 * np.minimum(data["Rain"], 1500)
+    rain_effect -= np.maximum(data["Rain"] - 1700, 0) * 0.00018
+    temp_effect = (
+        0.16
+        - 0.012 * np.maximum(data["Temp"] - 30, 0) ** 1.35
+        - 0.010 * np.maximum(23 - data["Temp"], 0) ** 1.25
     )
+    ph_effect = -0.16 * (data["pH"] - 6.2) ** 2
+
+    data["Yield"] = (
+        3.15 + rain_effect + temp_effect + ph_effect
+        + 0.18 * data["Gene_A"]
+        + 0.16 * data["Gene_B"]
+        + 0.14 * data["Gene_C"]
+        + 0.10 * data["Gene_D"]
+        + np.random.normal(0, 0.07, data_size)
+    ).clip(1.8, 5.8)
 
     features = data[["Gene_A", "Gene_B", "Gene_C", "Gene_D", "Rain", "Temp", "pH"]]
-    target = data["Yield"]
-
-    model = RandomForestRegressor(n_estimators=300, random_state=42)
-    model.fit(features, target)
+    model = RandomForestRegressor(
+        n_estimators=400, min_samples_leaf=3, max_features=0.9,
+        random_state=42, n_jobs=-1
+    )
+    model.fit(features, data["Yield"])
     return model
 
 
@@ -1971,6 +1974,9 @@ if submitted:
         raw_model_pred = float(yield_model.predict([[g1, g2, g3, g4, rain_val, temp_val, ph]])[0])
         disease, water = crop_health(g2, rain_val, temp_val)
         disease = 1 if disease_name not in {"Healthy", "Not Checked", "AI Model Not Available", "Model Error"} else 0
+        variety_factor = 1.0
+        if online_profile and online_profile.get("baseline_yield_kg_acre"):
+            variety_factor = float(np.clip((online_profile["baseline_yield_kg_acre"] / YIELD_THA_TO_KG_ACRE) / 4.1, 0.90, 1.10))
         base_pred = evidence_calibrated_yield_t_ha(
             raw_model_pred,
             online_profile,
@@ -1981,6 +1987,7 @@ if submitted:
             growth_ratio=growth_metrics.get("growth_ratio"),
             water_stress=water,
             disease_risk=disease,
+            variety_factor=variety_factor,
         )
         advisory_research = research_agronomic_recommendations(crop_name, soil_type, rain_val, temp_val, ph, fertilizer_use, disease_name, water)
         alternative_crops = recommend_alternative_crops(soil_type, rain_val, temp_val, ph, water_source, water)
